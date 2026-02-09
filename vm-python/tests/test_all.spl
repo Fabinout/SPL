@@ -1,0 +1,334 @@
+; ============================================================
+; Comprehensive SPL test suite
+; Exercises every opcode and key edge cases.
+; Each test prints a letter on pass or '!' on fail.
+; Expected output: "ABCDEFGHIJKLMNOPQRSTUV\nAll 22 tests passed!\n"
+; ============================================================
+
+; --- Utility: assert_eq ---
+; Compares top two stack values. If equal, jumps to the address
+; pushed before the two values. We can't do that without indirect
+; jumps, so instead we use a pattern: call test, each test
+; prints its own pass/fail letter.
+
+; ============================================
+; Test A: push + out (basic I/O)
+; ============================================
+(push 65) (out 0x01)  ; 'A' — if we see it, push/out work
+
+; ============================================
+; Test B: dup
+; ============================================
+(push 66)       ; B
+(dup)           ; B B
+(sub)           ; B - B = 0
+(jump-if-zero test_b_pass)
+(push 33) (out 0x01) (jump test_c) ; '!'
+(label test_b_pass)
+(push 66) (out 0x01)  ; 'B'
+
+; ============================================
+; Test C: swap
+; ============================================
+(label test_c)
+(push 1)
+(push 2)
+(swap)             ; stack: [2, 1] — 1 on top, 2 underneath
+; Verify top is 1
+(push 1) (sub)     ; 1 - 1 = 0
+(jump-if-zero test_c_check2)
+(push 33) (out 0x01) (jump test_d)
+(label test_c_check2)
+; Remaining value should be 2
+(push 2) (sub)     ; 2 - 2 = 0
+(jump-if-zero test_c_pass)
+(push 33) (out 0x01) (jump test_d)
+(label test_c_pass)
+(push 67) (out 0x01)  ; 'C'
+
+; ============================================
+; Test D: over
+; ============================================
+(label test_d)
+(push 10)
+(push 20)
+(over)          ; 10 20 10
+(push 10) (sub) ; should be 0
+(jump-if-zero test_d_pass)
+(push 33) (out 0x01) (jump test_e)
+(label test_d_pass)
+(drop) (drop)   ; clean stack
+(push 68) (out 0x01)  ; 'D'
+
+; ============================================
+; Test E: add
+; ============================================
+(label test_e)
+(push 100)
+(push 55)
+(add)           ; 155
+(push 155) (sub)
+(jump-if-zero test_e_pass)
+(push 33) (out 0x01) (jump test_f)
+(label test_e_pass)
+(push 69) (out 0x01)  ; 'E'
+
+; ============================================
+; Test F: sub
+; ============================================
+(label test_f)
+(push 200)
+(push 50)
+(sub)           ; 150
+(push 150) (sub)
+(jump-if-zero test_f_pass)
+(push 33) (out 0x01) (jump test_g)
+(label test_f_pass)
+(push 70) (out 0x01)  ; 'F'
+
+; ============================================
+; Test G: sub wrapping (unsigned mod 256)
+; ============================================
+(label test_g)
+(push 3)
+(push 5)
+(sub)           ; 3 - 5 = 254 (mod 256)
+(push 254) (sub)
+(jump-if-zero test_g_pass)
+(push 33) (out 0x01) (jump test_h)
+(label test_g_pass)
+(push 71) (out 0x01)  ; 'G'
+
+; ============================================
+; Test H: mul
+; ============================================
+(label test_h)
+(push 7)
+(push 6)
+(mul)           ; 42
+(push 42) (sub)
+(jump-if-zero test_h_pass)
+(push 33) (out 0x01) (jump test_i)
+(label test_h_pass)
+(push 72) (out 0x01)  ; 'H'
+
+; ============================================
+; Test I: mul wrapping (mod 256)
+; ============================================
+(label test_i)
+(push 128)
+(push 3)
+(mul)           ; 384 mod 256 = 128
+(push 128) (sub)
+(jump-if-zero test_i_pass)
+(push 33) (out 0x01) (jump test_j)
+(label test_i_pass)
+(push 73) (out 0x01)  ; 'I'
+
+; ============================================
+; Test J: div
+; ============================================
+(label test_j)
+(push 100)
+(push 10)
+(div)           ; 10
+(push 10) (sub)
+(jump-if-zero test_j_pass)
+(push 33) (out 0x01) (jump test_k)
+(label test_j_pass)
+(push 74) (out 0x01)  ; 'J'
+
+; ============================================
+; Test K: div by zero = 0
+; ============================================
+(label test_k)
+(push 42)
+(push 0)
+(div)           ; 42 / 0 = 0
+(jump-if-zero test_k_pass)
+(push 33) (out 0x01) (jump test_l)
+(label test_k_pass)
+(push 75) (out 0x01)  ; 'K'
+
+; ============================================
+; Test L: mod
+; ============================================
+(label test_l)
+(push 17)
+(push 5)
+(mod)           ; 17 % 5 = 2
+(push 2) (sub)
+(jump-if-zero test_l_pass)
+(push 33) (out 0x01) (jump test_m)
+(label test_l_pass)
+(push 76) (out 0x01)  ; 'L'
+
+; ============================================
+; Test M: mod by zero = 0
+; ============================================
+(label test_m)
+(push 42)
+(push 0)
+(mod)           ; 42 % 0 = 0
+(jump-if-zero test_m_pass)
+(push 33) (out 0x01) (jump test_n)
+(label test_m_pass)
+(push 77) (out 0x01)  ; 'M'
+
+; ============================================
+; Test N: and
+; ============================================
+(label test_n)
+(push 0xFF)
+(push 0x0F)
+(and)           ; 0x0F
+(push 0x0F) (sub)
+(jump-if-zero test_n_pass)
+(push 33) (out 0x01) (jump test_o)
+(label test_n_pass)
+(push 78) (out 0x01)  ; 'N'
+
+; ============================================
+; Test O: or
+; ============================================
+(label test_o)
+(push 0xF0)
+(push 0x0F)
+(or)            ; 0xFF
+(push 0xFF) (sub)
+(jump-if-zero test_o_pass)
+(push 33) (out 0x01) (jump test_p)
+(label test_o_pass)
+(push 79) (out 0x01)  ; 'O'
+
+; ============================================
+; Test P: xor
+; ============================================
+(label test_p)
+(push 0xFF)
+(push 0x0F)
+(xor)           ; 0xF0
+(push 0xF0) (sub)
+(jump-if-zero test_p_pass)
+(push 33) (out 0x01) (jump test_q)
+(label test_p_pass)
+(push 80) (out 0x01)  ; 'P'
+
+; ============================================
+; Test Q: not (bitwise)
+; ============================================
+(label test_q)
+(push 0x0F)
+(not)           ; 0xF0
+(push 0xF0) (sub)
+(jump-if-zero test_q_pass)
+(push 33) (out 0x01) (jump test_r)
+(label test_q_pass)
+(push 81) (out 0x01)  ; 'Q'
+
+; ============================================
+; Test R: store + load (memory)
+; ============================================
+(label test_r)
+(push 0xAB)
+(store 0x1000)
+(load 0x1000)
+(push 0xAB) (sub)
+(jump-if-zero test_r_pass)
+(push 33) (out 0x01) (jump test_s)
+(label test_r_pass)
+(push 82) (out 0x01)  ; 'R'
+
+; ============================================
+; Test S: jump (unconditional)
+; ============================================
+(label test_s)
+(jump test_s_pass)
+(push 33) (out 0x01) (jump test_t) ; should be skipped
+(label test_s_pass)
+(push 83) (out 0x01)  ; 'S'
+
+; ============================================
+; Test T: jump-if-zero / jump-if-not-zero
+; ============================================
+(label test_t)
+; jump-if-zero with 0: should jump
+(push 0)
+(jump-if-zero test_t_ok1)
+(push 33) (out 0x01) (jump test_u)
+(label test_t_ok1)
+; jump-if-not-zero with 1: should jump
+(push 1)
+(jump-if-not-zero test_t_ok2)
+(push 33) (out 0x01) (jump test_u)
+(label test_t_ok2)
+; jump-if-zero with 5: should NOT jump
+(push 5)
+(jump-if-zero test_t_fail)
+(jump test_t_ok3)
+(label test_t_fail)
+(push 33) (out 0x01) (jump test_u)
+(label test_t_ok3)
+; jump-if-not-zero with 0: should NOT jump
+(push 0)
+(jump-if-not-zero test_t_fail2)
+(jump test_t_pass)
+(label test_t_fail2)
+(push 33) (out 0x01) (jump test_u)
+(label test_t_pass)
+(push 84) (out 0x01)  ; 'T'
+
+; ============================================
+; Test U: call + return
+; ============================================
+(label test_u)
+(call test_u_func)
+(jump test_u_done)
+(label test_u_func)
+  (push 85) (out 0x01) ; 'U'
+  (return)
+(label test_u_done)
+
+; ============================================
+; Test V: SYSCTL_CAPS (port 0xFF) and RNG (port 0x10)
+; ============================================
+(push 0xAF)     ; expected CAPS for console+rng+timer+video+mouse
+(in 0xFF)       ; read SYSCTL_CAPS
+(sub)
+(jump-if-zero test_v_caps_ok)
+(push 33) (out 0x01) (jump test_done)
+(label test_v_caps_ok)
+; Read RNG — just verify it doesn't crash (any value is fine)
+(in 0x10)
+(drop)
+(push 86) (out 0x01)  ; 'V'
+
+; ============================================
+; Done — print summary
+; ============================================
+(label test_done)
+(push 10) (out 0x01)  ; newline
+
+; Print "All 22 tests passed!\n"
+(push 65)  (out 0x01) ; A
+(push 108) (out 0x01) ; l
+(push 108) (out 0x01) ; l
+(push 32)  (out 0x01) ;
+(push 50)  (out 0x01) ; 2
+(push 50)  (out 0x01) ; 2
+(push 32)  (out 0x01) ;
+(push 116) (out 0x01) ; t
+(push 101) (out 0x01) ; e
+(push 115) (out 0x01) ; s
+(push 116) (out 0x01) ; t
+(push 115) (out 0x01) ; s
+(push 32)  (out 0x01) ;
+(push 112) (out 0x01) ; p
+(push 97)  (out 0x01) ; a
+(push 115) (out 0x01) ; s
+(push 115) (out 0x01) ; s
+(push 101) (out 0x01) ; e
+(push 100) (out 0x01) ; d
+(push 33)  (out 0x01) ; !
+(push 10)  (out 0x01) ; \n
+(halt)

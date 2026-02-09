@@ -1,0 +1,85 @@
+; paint.spl — Dessine des pixels blancs avec la souris (FB8 64x64)
+;
+; Cliquer (bouton gauche) pour allumer un pixel blanc.
+; Le programme tourne en boucle jusqu'à fermeture de la fenêtre.
+;
+; Nécessite : vidéo (bit5) + souris (bit7) dans SYSCTL_CAPS.
+; Utilise store-indirect pour écrire à l'adresse calculée du pixel.
+
+; --- Vérifier les capacités (vidéo + souris) ---
+(in 0xFF)
+(push 0xA0) (and)               ; bits 5+7 = 0xA0
+(push 0xA0) (sub)
+(jump-if-zero caps_ok)
+
+; Pas de vidéo/souris — message et sortie
+(push 69)  (out 0x01)           ; E
+(push 114) (out 0x01)           ; r
+(push 114) (out 0x01)           ; r
+(push 10)  (out 0x01)           ; \n
+(halt)
+
+(label caps_ok)
+
+; --- Init FB8 64x64, stride=64, fb=0x8000 ---
+(push 1)    (out 0x30)          ; VID_MODE = FB8
+(push 64)   (out 0x31)          ; W_LO  = 64
+(push 0)    (out 0x32)          ; W_HI  = 0
+(push 64)   (out 0x33)          ; H_LO  = 64
+(push 0)    (out 0x34)          ; H_HI  = 0
+(push 64)   (out 0x35)          ; STRIDE_LO = 64
+(push 0)    (out 0x36)          ; STRIDE_HI = 0
+(push 0x00) (out 0x37)          ; FB_ADDR_LO = 0x00
+(push 0x80) (out 0x38)          ; FB_ADDR_HI = 0x80
+
+; --- Fond noir ---
+(push 0)    (out 0x3B)          ; CLEAR_COLOR_LO
+(push 0)    (out 0x3C)          ; CLEAR_COLOR_HI
+(push 1)    (out 0x3D)          ; VID_CLEAR
+
+; ============================================================
+; Boucle principale
+; ============================================================
+(label loop)
+(push 1)    (out 0x3A)          ; VID_FLIP  (affiche + traite events)
+
+; Lire boutons souris
+(in 0x74)
+(push 1) (and)                  ; bit0 = bouton gauche
+(jump-if-zero loop)             ; pas cliqué → boucler
+
+; --- Bouton gauche enfoncé : lire X, Y ---
+(in 0x70)                       ; X_LO (0..63)
+(store 0x0000)                  ; temp X
+(in 0x72)                       ; Y_LO (0..63)
+(store 0x0001)                  ; temp Y
+
+; --- Calculer l'adresse du pixel ---
+; pixel(x,y) = 0x8000 + y*64 + x
+; addr_hi = 0x80 + y/4
+; addr_lo = (y%4)*64 + x
+; max addr_lo = 3*64 + 63 = 255 → pas de retenue
+
+; Empiler la valeur du pixel (pour store-indirect)
+(push 0xFF)                     ; blanc
+
+; addr_hi = 0x80 + Y/4
+(load 0x0001)                   ; Y
+(push 4)
+(div)                           ; Y / 4
+(push 0x80)
+(add)                           ; addr_hi
+
+; addr_lo = (Y % 4) * 64 + X
+(load 0x0001)                   ; Y
+(push 4)
+(mod)                           ; Y % 4
+(push 64)
+(mul)                           ; (Y%4) * 64   (max 192, tient en 8 bits)
+(load 0x0000)                   ; X
+(add)                           ; addr_lo
+
+; Pile : [0xFF, addr_hi, addr_lo]
+(store-indirect)
+
+(jump loop)

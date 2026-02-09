@@ -1,0 +1,21 @@
+; Stack operations test — exercises dup, swap, over, drop
+; Expected output: "ABBA\n"
+
+; Test swap: push A B, swap -> B A, print both
+(push 65)         ; A
+(push 66)         ; A B
+(swap)            ; B A
+(over)            ; B A B
+(swap)            ; B B A
+
+; Stack is now: B B A
+; Print top 3: A first (top)
+(out 0x01)        ; print A (65)
+(out 0x01)        ; print B (66)
+(out 0x01)        ; print B (66)
+
+; Now push and print A
+(push 65) (out 0x01) ; print A
+
+(push 10) (out 0x01) ; newline
+(halt)

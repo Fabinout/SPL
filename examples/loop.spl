@@ -1,0 +1,17 @@
+; Loop test — counts down from 5 to 1, prints each digit
+; Expected output: "54321\n"
+
+(push 5)                   ; counter = 5
+
+(label loop)
+  (dup)                    ; copy counter for printing
+  (push 48) (add)          ; convert to ASCII digit
+  (out 0x01)               ; print
+
+  (push 1) (sub)           ; counter--
+  (dup)                    ; copy for test
+  (jump-if-not-zero loop)  ; loop if counter != 0
+
+(drop)                     ; clean up the 0
+(push 10) (out 0x01)       ; newline
+(halt)

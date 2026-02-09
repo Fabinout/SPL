@@ -1,0 +1,18 @@
+; Memory test — store and load values, print result
+; Expected output: "OK\n"
+
+; Store 'O' at address 0x0400
+(push 79)
+(store 0x0400)
+
+; Store 'K' at address 0x0401
+(push 75)
+(store 0x0401)
+
+; Load and print
+(load 0x0400)
+(out 0x01)         ; prints 'O'
+(load 0x0401)
+(out 0x01)         ; prints 'K'
+(push 10) (out 0x01) ; newline
+(halt)

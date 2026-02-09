@@ -1,0 +1,18 @@
+; Hello, World! in SPL
+; Prints "Hello, World!\n" to console
+
+(push 72)  (out 0x01)  ; H
+(push 101) (out 0x01)  ; e
+(push 108) (out 0x01)  ; l
+(push 108) (out 0x01)  ; l
+(push 111) (out 0x01)  ; o
+(push 44)  (out 0x01)  ; ,
+(push 32)  (out 0x01)  ; (space)
+(push 87)  (out 0x01)  ; W
+(push 111) (out 0x01)  ; o
+(push 114) (out 0x01)  ; r
+(push 108) (out 0x01)  ; l
+(push 100) (out 0x01)  ; d
+(push 33)  (out 0x01)  ; !
+(push 10)  (out 0x01)  ; \n
+(halt)

@@ -1,0 +1,20 @@
+; Function call test — demonstrates call/return and forward references
+; Expected output: "BAC\n"
+
+(call print_B)
+(call print_A)
+(call print_C)
+(push 10) (out 0x01)  ; newline
+(halt)
+
+(label print_A)
+  (push 65) (out 0x01)  ; 'A'
+  (return)
+
+(label print_B)
+  (push 66) (out 0x01)  ; 'B'
+  (return)
+
+(label print_C)
+  (push 67) (out 0x01)  ; 'C'
+  (return)

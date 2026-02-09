@@ -7,13 +7,24 @@ Architecture:
   - Harvard: separate code space (ROM) and data memory (64 KiB RAM)
   - Work stack: 256 entries (8-bit values)
   - Return stack: 64 entries (16-bit addresses)
-  - Port-mapped I/O: console, RNG, timer, video (FB8/FB16), SYSCTL_CAPS
+  - Port-mapped I/O: console, RNG, timer, video (FB8/FB16), audio (PSG4), SYSCTL_CAPS
+
+Audio requires: pip install sounddevice numpy
 """
 
 import sys
 import os
 import time
 import random
+import math
+import threading
+
+try:
+    import sounddevice as sd
+    import numpy as np
+    _HAS_AUDIO = True
+except ImportError:
+    _HAS_AUDIO = False
 
 # ---------------------------------------------------------------------------
 # Opcodes
@@ -46,8 +57,150 @@ OP_RETURN           = 0x34
 OP_IN               = 0x40
 OP_OUT              = 0x41
 
-# SYSCTL_CAPS: console status + flush + RNG + timer + video + mouse
-CAPS_VALUE = 0xAF
+# SYSCTL_CAPS: console status + flush + RNG + timer + video + audio + mouse
+CAPS_VALUE = 0xEF
+
+
+# ---------------------------------------------------------------------------
+# Audio subsystem (PSG 4 channels via sounddevice)
+# ---------------------------------------------------------------------------
+
+class AudioChannel:
+    """State for one PSG channel."""
+    __slots__ = ('freq', 'volume', 'waveform', 'gate', 'phase')
+
+    def __init__(self):
+        self.freq = 0       # 16-bit Hz
+        self.volume = 0     # 0..15
+        self.waveform = 0   # 0=sine,1=square,2=tri,3=saw,4=noise
+        self.gate = 0       # 0=off, 1=on
+        self.phase = 0.0    # running phase [0, 1)
+
+
+class AudioSubsystem:
+    """PSG 4-channel synthesizer. Uses sounddevice for real-time output."""
+
+    SAMPLE_RATE = 44100
+    BLOCK_SIZE = 512
+
+    def __init__(self):
+        self.channels = [AudioChannel() for _ in range(4)]
+        self.selected = 0
+        self.master_vol = 15
+        self._stream = None
+        self._lock = threading.Lock()
+        self._started = False
+        self._noise_state = [0xACE1] * 4  # LFSR per channel
+
+    def _ensure_started(self):
+        """Lazily start the audio stream on first gate-on."""
+        if self._started or not _HAS_AUDIO:
+            return
+        self._started = True
+        try:
+            self._stream = sd.OutputStream(
+                samplerate=self.SAMPLE_RATE,
+                channels=1,
+                dtype='float32',
+                blocksize=self.BLOCK_SIZE,
+                callback=self._audio_callback,
+            )
+            self._stream.start()
+        except Exception as e:
+            print(f"[audio] Could not open audio device: {e}", file=sys.stderr)
+            self._stream = None
+
+    def _audio_callback(self, outdata, frames, time_info, status):
+        """Called by sounddevice to fill audio buffer."""
+        buf = np.zeros(frames, dtype=np.float32)
+        sr = self.SAMPLE_RATE
+
+        with self._lock:
+            master = self.master_vol / 15.0
+            for i, ch in enumerate(self.channels):
+                if not ch.gate or ch.volume == 0 or ch.freq == 0:
+                    continue
+                vol = (ch.volume / 15.0) * master * 0.25  # 0.25 = mix headroom
+                freq = ch.freq
+                phase = ch.phase
+                phase_inc = freq / sr
+                wf = ch.waveform
+
+                if wf == 4:  # noise
+                    lfsr = self._noise_state[i]
+                    for j in range(frames):
+                        # Generate noise at the given frequency rate
+                        phase += phase_inc
+                        if phase >= 1.0:
+                            phase -= 1.0
+                            # LFSR step (16-bit, taps at bits 0,2,3,5)
+                            bit = ((lfsr >> 0) ^ (lfsr >> 2) ^
+                                   (lfsr >> 3) ^ (lfsr >> 5)) & 1
+                            lfsr = ((lfsr >> 1) | (bit << 15)) & 0xFFFF
+                        buf[j] += vol * ((lfsr & 1) * 2.0 - 1.0)
+                    self._noise_state[i] = lfsr
+                    ch.phase = phase
+                else:
+                    # Vectorised generation for tonal waveforms
+                    t = np.arange(frames, dtype=np.float64) * phase_inc + phase
+                    t = t % 1.0
+                    if wf == 0:    # sine
+                        wave = np.sin(2.0 * np.pi * t).astype(np.float32)
+                    elif wf == 1:  # square
+                        wave = np.where(t < 0.5,
+                                        np.float32(1.0),
+                                        np.float32(-1.0))
+                    elif wf == 2:  # triangle
+                        wave = (4.0 * np.abs(t - 0.5) - 1.0).astype(np.float32)
+                    elif wf == 3:  # sawtooth
+                        wave = (2.0 * t - 1.0).astype(np.float32)
+                    else:
+                        wave = np.zeros(frames, dtype=np.float32)
+                    buf += vol * wave
+                    ch.phase = float(t[-1]) + phase_inc if frames > 0 else phase
+                    # Keep phase in [0, 1)
+                    ch.phase %= 1.0
+
+        # Clip to [-1, 1]
+        np.clip(buf, -1.0, 1.0, out=buf)
+        outdata[:, 0] = buf
+
+    def set_port(self, port, val):
+        with self._lock:
+            if port == 0x50:    # AUD_CH_SELECT
+                self.selected = val & 0x03
+            elif port == 0x57:  # AUD_MASTER_VOL
+                self.master_vol = min(val, 15)
+            else:
+                ch = self.channels[self.selected]
+                if port == 0x51:    # AUD_FREQ_LO
+                    ch.freq = (ch.freq & 0xFF00) | val
+                elif port == 0x52:  # AUD_FREQ_HI
+                    ch.freq = (ch.freq & 0x00FF) | (val << 8)
+                elif port == 0x53:  # AUD_VOLUME
+                    ch.volume = min(val, 15)
+                elif port == 0x54:  # AUD_WAVEFORM
+                    ch.waveform = min(val, 4)
+                elif port == 0x55:  # AUD_GATE
+                    ch.gate = 1 if val else 0
+                    if ch.gate:
+                        ch.phase = 0.0
+                        self._ensure_started()
+
+    def get_port(self, port):
+        if port == 0x56:  # AUD_STATUS
+            return 0x01 if self._started and self._stream else 0x00
+        if port == 0x59:  # PCM_STATUS (no FIFO implemented)
+            return 0x00
+        return 0
+
+    def shutdown(self):
+        if self._stream is not None:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +435,9 @@ class SPLVM:
         # Video
         self.video = VideoSubsystem()
 
+        # Audio
+        self.audio = AudioSubsystem()
+
     # --- Stack operations ---
 
     def push(self, val):
@@ -355,6 +511,9 @@ class SPLVM:
         elif 0x30 <= port <= 0x3F:  # Video
             return self.video.get_port(port)
 
+        elif port in (0x56, 0x59):  # Audio status
+            return self.audio.get_port(port)
+
         elif 0x70 <= port <= 0x76:  # Mouse
             return self.video.get_mouse_port(port)
 
@@ -379,6 +538,9 @@ class SPLVM:
             self.video.set_port(port, val)
         elif port == 0x77:      # MOUSE_CLEAR
             self.video.clear_mouse()
+
+        elif 0x50 <= port <= 0x58:  # Audio
+            self.audio.set_port(port, val)
 
     def flush_console(self):
         if self.console_buf:
@@ -484,6 +646,7 @@ class SPLVM:
                 self.fault(f"unknown opcode 0x{opcode:02X}")
 
         self.flush_console()
+        self.audio.shutdown()
 
 
 # ---------------------------------------------------------------------------

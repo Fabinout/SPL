@@ -1,0 +1,188 @@
+; audio_demo.spl — Simple audio demonstration
+; Plays a C major scale (C4..C5) on channel 0 using a square wave,
+; then replays it with a sine wave on channel 1.
+; Uses the timer to hold each note for ~300 ms.
+
+; --- Check audio capability ---
+(in 0xFF)                     ; SYSCTL_CAPS
+(push 0x40) (and)             ; bit6 = audio?
+(jump-if-zero no_audio)
+
+; --- Master volume ---
+(push 15) (out 0x57)          ; AUD_MASTER_VOL = 15
+
+; =============================================
+; Part 1: Square wave scale on channel 0
+; =============================================
+(push 0)    (out 0x50)        ; select channel 0
+(push 10)   (out 0x53)        ; volume = 10
+(push 1)    (out 0x54)        ; waveform = square
+
+; C4  = 262 Hz = 0x0106
+(push 0x06) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; D4  = 294 Hz = 0x0126
+(push 0x26) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; E4  = 330 Hz = 0x014A
+(push 0x4A) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; F4  = 349 Hz = 0x015D
+(push 0x5D) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; G4  = 392 Hz = 0x0188
+(push 0x88) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; A4  = 440 Hz = 0x01B8
+(push 0xB8) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; B4  = 494 Hz = 0x01EE
+(push 0xEE) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; C5  = 523 Hz = 0x020B
+(push 0x0B) (out 0x51) (push 0x02) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55)
+
+; Pause between parts
+(call delay)
+
+; =============================================
+; Part 2: Sine wave scale on channel 1
+; =============================================
+(push 1)    (out 0x50)        ; select channel 1
+(push 12)   (out 0x53)        ; volume = 12
+(push 0)    (out 0x54)        ; waveform = sine
+
+; C4
+(push 0x06) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; D4
+(push 0x26) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; E4
+(push 0x4A) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; F4
+(push 0x5D) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; G4
+(push 0x88) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; A4
+(push 0xB8) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; B4
+(push 0xEE) (out 0x51) (push 0x01) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55) (call short_pause)
+
+; C5
+(push 0x0B) (out 0x51) (push 0x02) (out 0x52)
+(push 1) (out 0x55) (call delay) (push 0) (out 0x55)
+
+; --- Done ---
+(push 68)  (out 0x01)         ; D
+(push 111) (out 0x01)         ; o
+(push 110) (out 0x01)         ; n
+(push 101) (out 0x01)         ; e
+(push 10)  (out 0x01)         ; \n
+(halt)
+
+; --- No audio fallback ---
+(label no_audio)
+(push 78)  (out 0x01)         ; N
+(push 111) (out 0x01)         ; o
+(push 32)  (out 0x01)         ;
+(push 97)  (out 0x01)         ; a
+(push 117) (out 0x01)         ; u
+(push 100) (out 0x01)         ; d
+(push 105) (out 0x01)         ; i
+(push 111) (out 0x01)         ; o
+(push 10)  (out 0x01)         ; \n
+(halt)
+
+; =============================================
+; Subroutine: delay (~300 ms using timer)
+; =============================================
+(label delay)
+; Read current time, store target = now + 300ms (low byte only for simplicity)
+; We use a busy-wait loop comparing timer B0 changes.
+; Strategy: count ~300 iterations of ~1ms busy loops.
+; Store loop counter in memory at address 0x0000 (hi) and 0x0001 (lo).
+(push 1)    (store 0x0000)    ; counter hi = 1
+(push 0x2C) (store 0x0001)    ; counter lo = 44  -> 1*256+44 = 300
+
+(label delay_loop)
+; Decrement 16-bit counter at 0x0000:0x0001
+(load 0x0001)                 ; lo
+(push 1) (sub)                ; lo - 1
+(dup) (store 0x0001)          ; save lo
+(push 0xFF)                   ; check if lo wrapped (was 0, now 255)
+(sub)
+(jump-if-not-zero delay_no_borrow)
+; Borrow: decrement hi
+(load 0x0000) (push 1) (sub) (dup) (store 0x0000)
+; If hi also wrapped, we're done
+(push 0xFF) (sub)
+(jump-if-zero delay_done)
+(label delay_no_borrow)
+
+; Inner 1ms busy-wait: read timer, spin until B0 changes
+(in 0x14) (drop)              ; latch timer
+(in 0x11)                     ; read B0, store as reference
+(store 0x0002)
+(label delay_inner)
+(in 0x14) (drop)              ; latch
+(in 0x11)                     ; read B0
+(dup) (load 0x0002) (sub)     ; B0 - ref
+(jump-if-zero delay_inner)    ; spin until it changes
+(drop)                        ; drop extra B0
+
+(jump delay_loop)
+
+(label delay_done)
+(return)
+
+; =============================================
+; Subroutine: short_pause (~50 ms gap between notes)
+; =============================================
+(label short_pause)
+(push 0)    (store 0x0000)    ; counter hi = 0
+(push 50)   (store 0x0001)    ; counter lo = 50
+
+(label sp_loop)
+(load 0x0001)
+(push 1) (sub)
+(dup) (store 0x0001)
+(push 0xFF) (sub)
+(jump-if-not-zero sp_no_borrow)
+(load 0x0000) (push 1) (sub) (dup) (store 0x0000)
+(push 0xFF) (sub)
+(jump-if-zero sp_done)
+(label sp_no_borrow)
+
+(in 0x14) (drop)
+(in 0x11) (store 0x0002)
+(label sp_inner)
+(in 0x14) (drop)
+(in 0x11)
+(dup) (load 0x0002) (sub)
+(jump-if-zero sp_inner)
+(drop)
+
+(jump sp_loop)
+
+(label sp_done)
+(return)

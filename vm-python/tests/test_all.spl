@@ -292,7 +292,7 @@
 ; ============================================
 ; Test V: SYSCTL_CAPS (port 0xFF) and RNG (port 0x10)
 ; ============================================
-(push 0xAF)     ; expected CAPS for console+rng+timer+video+mouse
+(push 0xEF)     ; expected CAPS for console+rng+timer+video+audio+mouse
 (in 0xFF)       ; read SYSCTL_CAPS
 (sub)
 (jump-if-zero test_v_caps_ok)

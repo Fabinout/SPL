@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python spl_asm.py examples/function_call.spl examples/function_call.rom)",
+      "Bash(python:*)",
+      "Bash(git -C \"C:\\\\Users\\\\fabie\\\\WebstormProjects\\\\SPL\" log --oneline -5)"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+# Build artifacts
+*.rom
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.idea/

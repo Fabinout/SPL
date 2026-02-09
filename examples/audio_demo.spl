@@ -146,9 +146,8 @@
 (label delay_inner)
 (in 0x14) (drop)              ; latch
 (in 0x11)                     ; read B0
-(dup) (load 0x0002) (sub)     ; B0 - ref
+(load 0x0002) (sub)           ; B0 - ref (consumes B0)
 (jump-if-zero delay_inner)    ; spin until it changes
-(drop)                        ; drop extra B0
 
 (jump delay_loop)
 
@@ -178,9 +177,8 @@
 (label sp_inner)
 (in 0x14) (drop)
 (in 0x11)
-(dup) (load 0x0002) (sub)
+(load 0x0002) (sub)
 (jump-if-zero sp_inner)
-(drop)
 
 (jump sp_loop)
 

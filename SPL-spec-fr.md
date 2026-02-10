@@ -168,6 +168,7 @@ Suite d'expressions séparées par des espaces ou retours à la ligne. **Plusieu
 ```lisp
 (add) (sub) (mul) (div) (mod)
 (and) (or) (xor) (not)
+(lt) (gt)
 ```
 
 *   Toutes les valeurs sont **non signées** (0–255) et les résultats sont **modulo 256**.
@@ -175,6 +176,7 @@ Suite d'expressions séparées par des espaces ou retours à la ligne. **Plusieu
     Ex. `(push 5) (push 3) (sub)` → résultat = `5 - 3 = 2`.
 *   `(div)` et `(mod)` : division entière non signée. Division par zéro → **résultat = 0**.
 *   `(not)` : **NOT bit‑à‑bit** (inversion des 8 bits, ex. `0x0F` → `0xF0`).
+*   `(lt)` et `(gt)` : comparaison **non signée**. Pop b, pop a ; push **1** si `a < b` (resp. `a > b`), sinon push **0**.
 
 ## **6.3. Mémoire**
 
@@ -277,6 +279,8 @@ Chaque instruction s’encode :
 | or               | 0x16   | 0           |
 | xor              | 0x17   | 0           |
 | not              | 0x18   | 0           |
+| lt               | 0x19   | 0           |
+| gt               | 0x1A   | 0           |
 | load             | 0x20   | 2 bytes     |
 | store            | 0x21   | 2 bytes     |
 | jump             | 0x30   | 2 bytes     |

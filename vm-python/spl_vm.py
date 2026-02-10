@@ -45,6 +45,8 @@ OP_AND              = 0x15
 OP_OR               = 0x16
 OP_XOR              = 0x17
 OP_NOT              = 0x18
+OP_LT               = 0x19
+OP_GT               = 0x1A
 OP_LOAD             = 0x20
 OP_STORE            = 0x21
 OP_LOAD_INDIRECT    = 0x22
@@ -598,6 +600,10 @@ class SPLVM:
                 b = self.pop(); a = self.pop(); self.push(a ^ b)
             elif opcode == OP_NOT:
                 self.push((~self.pop()) & 0xFF)
+            elif opcode == OP_LT:
+                b = self.pop(); a = self.pop(); self.push(1 if a < b else 0)
+            elif opcode == OP_GT:
+                b = self.pop(); a = self.pop(); self.push(1 if a > b else 0)
 
             elif opcode == OP_LOAD:
                 addr = self.read_addr()

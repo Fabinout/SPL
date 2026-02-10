@@ -2,7 +2,7 @@
 ; Comprehensive SPL test suite
 ; Exercises every opcode and key edge cases.
 ; Each test prints a letter on pass or '!' on fail.
-; Expected output: "ABCDEFGHIJKLMNOPQRSTUVWX\nAll 24 tests passed!\n"
+; Expected output: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcd\nAll 30 tests passed!\n"
 ; ============================================================
 
 ; --- Utility: assert_eq ---
@@ -296,7 +296,7 @@
 (in 0xFF)       ; read SYSCTL_CAPS
 (sub)
 (jump-if-zero test_v_caps_ok)
-(push 33) (out 0x01) (jump test_done)
+(push 33) (out 0x01) (jump test_w)
 (label test_v_caps_ok)
 ; Read RNG — just verify it doesn't crash (any value is fine)
 (in 0x10)
@@ -326,18 +326,92 @@
 (push 88) (out 0x01)  ; 'X'
 
 ; ============================================
+; Test Y: lt (3 < 5 → 1)
+; ============================================
+(label test_y)
+(push 3)
+(push 5)
+(lt)
+(push 1) (sub)
+(jump-if-zero test_y_pass)
+(push 33) (out 0x01) (jump test_z)
+(label test_y_pass)
+(push 89) (out 0x01)  ; 'Y'
+
+; ============================================
+; Test Z: lt (5 < 3 → 0)
+; ============================================
+(label test_z)
+(push 5)
+(push 3)
+(lt)
+(jump-if-zero test_z_pass)
+(push 33) (out 0x01) (jump test_aa)
+(label test_z_pass)
+(push 90) (out 0x01)  ; 'Z'
+
+; ============================================
+; Test AA: lt (3 < 3 → 0, equal case)
+; ============================================
+(label test_aa)
+(push 3)
+(push 3)
+(lt)
+(jump-if-zero test_aa_pass)
+(push 33) (out 0x01) (jump test_ab)
+(label test_aa_pass)
+(push 97) (out 0x01)  ; 'a'
+
+; ============================================
+; Test AB: gt (5 > 3 → 1)
+; ============================================
+(label test_ab)
+(push 5)
+(push 3)
+(gt)
+(push 1) (sub)
+(jump-if-zero test_ab_pass)
+(push 33) (out 0x01) (jump test_ac)
+(label test_ab_pass)
+(push 98) (out 0x01)  ; 'b'
+
+; ============================================
+; Test AC: gt (3 > 5 → 0)
+; ============================================
+(label test_ac)
+(push 3)
+(push 5)
+(gt)
+(jump-if-zero test_ac_pass)
+(push 33) (out 0x01) (jump test_ad)
+(label test_ac_pass)
+(push 99) (out 0x01)  ; 'c'
+
+; ============================================
+; Test AD: gt (3 > 3 → 0, equal case)
+; ============================================
+(label test_ad)
+(push 3)
+(push 3)
+(gt)
+(jump-if-zero test_ad_pass)
+(push 33) (out 0x01) (jump test_done)
+(label test_ad_pass)
+(push 100) (out 0x01)  ; 'd'
+
+; ============================================
 ; Done — print summary
 ; ============================================
 (label test_done)
 (push 10) (out 0x01)  ; newline
 
-; Print "All 24 tests passed!\n"
+; Print "All 30 tests passed!\n"
 (push 65)  (out 0x01) ; A
 (push 108) (out 0x01) ; l
 (push 108) (out 0x01) ; l
 (push 32)  (out 0x01) ;
-(push 50)  (out 0x01) ; 2
-(push 52)  (out 0x01) ; 4
+(push 51)  (out 0x01) ; 3
+(push 48)  (out 0x01) ; 0
 (push 32)  (out 0x01) ;
 (push 116) (out 0x01) ; t
 (push 101) (out 0x01) ; e

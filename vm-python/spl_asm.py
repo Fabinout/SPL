@@ -32,6 +32,8 @@ INSTRUCTIONS = {
     'or':               (0x16, 'none'),
     'xor':              (0x17, 'none'),
     'not':              (0x18, 'none'),
+    'lt':               (0x19, 'none'),
+    'gt':               (0x1A, 'none'),
     'load':             (0x20, 'addr16'),
     'store':            (0x21, 'addr16'),
     'load-indirect':    (0x22, 'none'),

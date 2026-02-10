@@ -104,10 +104,10 @@ def main():
     print(f"Running {total} tests...\n")
 
     # --- test_all.spl: functional test covering every opcode ---
-    expected = "ABCDEFGHIJKLMNOPQRSTUVWX\nAll 24 tests passed!\n"
+    expected = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcd\nAll 30 tests passed!\n"
     ok, actual, err = asm_and_run(TEST_ALL)
     if ok and actual == expected:
-        print("  PASS  test_all.spl (24 opcode tests)")
+        print("  PASS  test_all.spl (30 opcode tests)")
         passed += 1
     else:
         print(f"  FAIL  test_all.spl")

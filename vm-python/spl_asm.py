@@ -84,6 +84,32 @@ def tokenize(source, filename="<input>"):
         elif c == ')':
             tokens.append(('RPAREN', ')', line))
             i += 1
+        elif c == '"':
+            # String literal: "..." with escape sequences
+            i += 1  # skip opening quote
+            string_val = []
+            while i < n and source[i] != '"':
+                if source[i] == '\\':
+                    i += 1
+                    if i >= n:
+                        error("unterminated string escape", line)
+                    esc = source[i]
+                    if esc == 'n':    string_val.append('\n')
+                    elif esc == 't':  string_val.append('\t')
+                    elif esc == '\\': string_val.append('\\')
+                    elif esc == '"':  string_val.append('"')
+                    elif esc == '0':  string_val.append('\0')
+                    else:
+                        error(f"unknown escape '\\{esc}'", line)
+                elif source[i] == '\n':
+                    error("unterminated string literal", line)
+                else:
+                    string_val.append(source[i])
+                i += 1
+            if i >= n:
+                error("unterminated string literal", line)
+            i += 1  # skip closing quote
+            tokens.append(('STRING', ''.join(string_val), line))
         elif c.isalpha():
             # Identifier: letter { letter | digit | '-' | '_' }
             start = i
@@ -140,7 +166,7 @@ def parse(tokens):
         # Collect arguments until ')'
         args = []
         while i < n and tokens[i][0] != 'RPAREN':
-            if tokens[i][0] not in ('IDENT', 'NUMBER'):
+            if tokens[i][0] not in ('IDENT', 'NUMBER', 'STRING'):
                 error(f"expected argument, got '{tokens[i][1]}'", tokens[i][2])
             args.append(tokens[i])
             i += 1
@@ -194,6 +220,24 @@ def assemble(expressions):
                 error(f"label '{name}' conflicts with instruction name", line)
             labels[name] = offset
             # label emits no bytes
+        elif instr == 'data':
+            if len(args) < 2:
+                error("'data' requires a label and at least one data argument", line)
+            if args[0][0] != 'IDENT':
+                error("'data' first argument must be a label name", line)
+            name = args[0][1]
+            if name in labels:
+                error(f"duplicate label '{name}'", line)
+            if name in INSTRUCTIONS:
+                error(f"label '{name}' conflicts with instruction name", line)
+            labels[name] = offset
+            for arg in args[1:]:
+                if arg[0] == 'NUMBER':
+                    offset += 1
+                elif arg[0] == 'STRING':
+                    offset += len(arg[1])
+                else:
+                    error(f"'data' arguments after label must be numbers (0-255) or strings, got '{arg[1]}'", line)
         elif instr in INSTRUCTIONS:
             _, arg_type = INSTRUCTIONS[instr]
             offset += ARG_SIZES[arg_type]
@@ -205,6 +249,21 @@ def assemble(expressions):
 
     for instr, args, line in expressions:
         if instr == 'label':
+            continue
+
+        if instr == 'data':
+            for arg in args[1:]:  # skip label (first arg)
+                if arg[0] == 'NUMBER':
+                    val = parse_number(arg, line)
+                    if val < 0 or val > 255:
+                        error(f"data byte {val} out of range 0..255", line)
+                    bytecode.append(val)
+                elif arg[0] == 'STRING':
+                    for ch in arg[1]:
+                        code_point = ord(ch)
+                        if code_point > 127:
+                            error(f"data string contains non-ASCII character '{ch}'", line)
+                        bytecode.append(code_point)
             continue
 
         opcode, arg_type = INSTRUCTIONS[instr]

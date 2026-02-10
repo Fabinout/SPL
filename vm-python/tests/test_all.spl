@@ -2,7 +2,7 @@
 ; Comprehensive SPL test suite
 ; Exercises every opcode and key edge cases.
 ; Each test prints a letter on pass or '!' on fail.
-; Expected output: "ABCDEFGHIJKLMNOPQRSTUV\nAll 22 tests passed!\n"
+; Expected output: "ABCDEFGHIJKLMNOPQRSTUVWX\nAll 24 tests passed!\n"
 ; ============================================================
 
 ; --- Utility: assert_eq ---
@@ -304,18 +304,40 @@
 (push 86) (out 0x01)  ; 'V'
 
 ; ============================================
+; Test W: data pseudo-instruction (numeric bytes)
+; ============================================
+(label test_w)
+(jump test_w_after_data)
+(data test_w_bytes 0x48 0x65 0x6C 0x6C 0x6F)  ; "Hello" = 5 bytes
+(label test_w_after_data)
+; If label resolution is correct, we jump here successfully.
+; If data bytes were not counted, the jump target would be wrong
+; and the VM would execute garbage bytes.
+(push 87) (out 0x01)  ; 'W'
+
+; ============================================
+; Test X: data with string syntax
+; ============================================
+(label test_x)
+(jump test_x_after_str)
+(data test_x_str "ABCDE")  ; 5 bytes
+(label test_x_after_str)
+; Same logic: if we land here, label offsets are correct
+(push 88) (out 0x01)  ; 'X'
+
+; ============================================
 ; Done — print summary
 ; ============================================
 (label test_done)
 (push 10) (out 0x01)  ; newline
 
-; Print "All 22 tests passed!\n"
+; Print "All 24 tests passed!\n"
 (push 65)  (out 0x01) ; A
 (push 108) (out 0x01) ; l
 (push 108) (out 0x01) ; l
 (push 32)  (out 0x01) ;
 (push 50)  (out 0x01) ; 2
-(push 50)  (out 0x01) ; 2
+(push 52)  (out 0x01) ; 4
 (push 32)  (out 0x01) ;
 (push 116) (out 0x01) ; t
 (push 101) (out 0x01) ; e

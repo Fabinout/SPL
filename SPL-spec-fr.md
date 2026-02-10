@@ -134,11 +134,18 @@ Exemple avec labels :
 *   décimal : `0`, `42`, `123`
 *   hexadécimal : `0x00`, `0x20`, `0xFF`
 
-## **5.4. Commentaires**
+## **5.4. Chaînes de caractères**
+
+*   Délimitées par des guillemets doubles : `"Hello"`
+*   Séquences d'échappement : `\n` (newline), `\t` (tabulation), `\\` (backslash), `\"` (guillemet), `\0` (null)
+*   Caractères ASCII uniquement (0–127)
+*   Utilisées uniquement comme arguments de `(data ...)`
+
+## **5.5. Commentaires**
 
     ; commentaire jusqu'à la fin de la ligne
 
-## **5.5. Fichier SPL**
+## **5.6. Fichier SPL**
 
 Suite d'expressions séparées par des espaces ou retours à la ligne. **Plusieurs expressions par ligne** sont autorisées. Les commentaires (`;`) s'étendent jusqu'à la fin de la ligne et sont ignorés lors du parsing.
 
@@ -203,6 +210,35 @@ Les adresses sont des **constantes 16 bits** (nombres uniquement, pas de labels)
 (out port8)   ; pop 8 bits vers le périphérique
 ```
 
+## **6.6. Données embarquées**
+
+```lisp
+(data label octets...)   ; émet des octets bruts dans le bytecode
+```
+
+*   Le premier argument est un **nom de label** (obligatoire) qui pointe sur le premier octet émis.
+*   Les arguments suivants sont des **nombres 8 bits** (0–255) ou des **chaînes de caractères** (`"texte"`).
+*   Chaque nombre émet 1 octet. Chaque caractère d'une chaîne émet 1 octet (ASCII).
+*   `(data)` n'émet **aucun opcode** — les octets sont insérés tels quels dans le bytecode.
+*   **Attention** : architecture Harvard — les données ROM ne sont pas accessibles par `(load)`/`(store)`. Utiliser `(jump)` pour sauter par-dessus les blocs de données.
+
+**Exemple** :
+
+```lisp
+(jump after-msg)
+(data msg 72 101 108 108 111)   ; "Hello" en ASCII
+(label after-msg)
+; msg pointe vers l'offset du 'H' dans le bytecode
+```
+
+**Exemple avec chaîne** :
+
+```lisp
+(jump after-greeting)
+(data greeting "Hello, World!")
+(label after-greeting)
+```
+
 ***
 
 # **7. Labels et résolution**
@@ -251,6 +287,7 @@ Chaque instruction s’encode :
 | in               | 0x40   | 1 byte port |
 | out              | 0x41   | 1 byte port |
 | label *(pseudo)* | —      | —           |
+| data *(pseudo)*  | —      | n bytes     |
 
 > **Adresses (2 bytes)** : **big‑endian** (HI, LO).  
 > **Ports** : 8 bits (0x00–0xFF).
@@ -280,10 +317,13 @@ Bytecode :
     program      = { expression | comment } ;
     expression   = "(" identifier { argument } ")" ;
     identifier   = letter { letter | digit | "-" | "_" } ;
-    argument     = number | identifier ;
+    argument     = number | identifier | string ;
     number       = hex-number | dec-number ;
     hex-number   = "0x" hex-digit { hex-digit } ;
     dec-number   = digit { digit } ;
+    string       = '"' { string-char | escape-seq } '"' ;
+    string-char  = any-ascii-except-quote-backslash-newline ;
+    escape-seq   = "\" ( "n" | "t" | "\" | '"' | "0" ) ;
     comment      = ";" { any-char-except-newline } newline ;
     letter       = "a"…"z" | "A"…"Z" ;
     digit        = "0"…"9" ;

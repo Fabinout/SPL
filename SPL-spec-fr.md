@@ -241,6 +241,61 @@ Les adresses sont des **constantes 16 bits** (nombres uniquement, pas de labels)
 (label after-greeting)
 ```
 
+## **6.7. Macros**
+
+```lisp
+(macro nom (instr1 args...)(instr2 args...)...)
+```
+
+*   Définit une macro nommée dont le corps est une séquence d'instructions S‑expressions.
+*   L'invocation `(nom)` remplace l'appel par le corps de la macro (expansion inline avant assemblage).
+*   Les macros peuvent appeler d'autres macros (expansion récursive, profondeur max 64).
+*   Le nom d'une macro ne peut pas être un nom d'instruction existant, ni un mot réservé (`label`, `data`, `macro`, `include`).
+*   Les noms de macros doivent être **uniques**.
+*   Les macros n'acceptent pas d'arguments à l'invocation : `(nom)` uniquement.
+*   **Limitation** : si le corps d'une macro contient `(label x)`, invoquer la macro plusieurs fois produit une erreur « duplicate label ».
+
+**Exemple** :
+
+```lisp
+(macro print-newline
+  (push 10)(out 0x01))
+
+(macro print-A
+  (push 65)(out 0x01))
+
+(print-A)
+(print-newline)
+(halt)
+; Sortie : "A\n"
+```
+
+## **6.8. Inclusion de fichiers**
+
+```lisp
+(include "chemin/vers/fichier.spl")
+```
+
+*   Insère le contenu du fichier spécifié à la position de la directive, avant le parsing.
+*   Le chemin est résolu **relativement au fichier contenant la directive** `include`.
+*   Les inclusions récursives sont supportées (un fichier inclus peut inclure d'autres fichiers).
+*   Les inclusions **circulaires** sont détectées et produisent une erreur.
+
+**Exemple** :
+
+```lisp
+; --- lib.spl ---
+(macro emit-hello
+  (push 72)(out 0x01)   ; H
+  (push 105)(out 0x01)) ; i
+
+; --- main.spl ---
+(include "lib.spl")
+(emit-hello)
+(halt)
+; Sortie : "Hi"
+```
+
 ***
 
 # **7. Labels et résolution**

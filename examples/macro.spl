@@ -1,0 +1,15 @@
+; Macro example — demonstrates (macro name body...) and invocation
+; Expected output: "Hi!\n"
+
+; --- Utility macros ---
+
+(macro print-newline
+  (push 10)(out 0x01))
+
+; --- Main program ---
+
+(push 72)  (out 0x01)  ; H
+(push 105) (out 0x01)  ; i
+(push 33)  (out 0x01)  ; !
+(print-newline)
+(halt)

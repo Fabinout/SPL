@@ -138,15 +138,63 @@ def tokenize(source, filename="<input>"):
     return tokens
 
 
+def tokenize_with_includes(source, filename, include_stack=None):
+    """Tokenize source, recursively processing (include "file") directives."""
+    if include_stack is None:
+        include_stack = []
+
+    abs_path = os.path.abspath(filename)
+    if abs_path in include_stack:
+        error(f"circular include: '{filename}'")
+    include_stack.append(abs_path)
+
+    raw_tokens = tokenize(source, filename)
+    result = []
+    i = 0
+    n = len(raw_tokens)
+
+    while i < n:
+        # Detect pattern: ( include "path" )
+        if (i + 3 < n
+                and raw_tokens[i][0] == 'LPAREN'
+                and raw_tokens[i + 1] == ('IDENT', 'include', raw_tokens[i + 1][2])
+                and raw_tokens[i + 2][0] == 'STRING'
+                and raw_tokens[i + 3][0] == 'RPAREN'):
+            inc_line = raw_tokens[i + 1][2]
+            inc_path = raw_tokens[i + 2][1]
+
+            base_dir = os.path.dirname(abs_path)
+            resolved = os.path.normpath(os.path.join(base_dir, inc_path))
+
+            try:
+                with open(resolved, 'r', encoding='utf-8') as f:
+                    inc_source = f.read()
+            except FileNotFoundError:
+                error(f"include file not found: '{inc_path}'", inc_line)
+
+            inc_tokens = tokenize_with_includes(inc_source, resolved, include_stack)
+            result.extend(inc_tokens)
+            i += 4
+        else:
+            result.append(raw_tokens[i])
+            i += 1
+
+    include_stack.pop()
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
 
 def parse(tokens):
-    """Parse tokens into a list of (instruction, args, line) tuples.
-    Each arg is a (type, value, line) token.
+    """Parse tokens into (expressions, macros).
+
+    expressions: list of (instruction, args, line) tuples.
+    macros: dict mapping macro name -> list of (instr, args, line) body expressions.
     """
     expressions = []
+    macros = {}
     i = 0
     n = len(tokens)
 
@@ -165,21 +213,107 @@ def parse(tokens):
         instr_line = tokens[i][2]
         i += 1
 
-        # Collect arguments until ')'
-        args = []
-        while i < n and tokens[i][0] != 'RPAREN':
-            if tokens[i][0] not in ('IDENT', 'NUMBER', 'STRING'):
-                error(f"expected argument, got '{tokens[i][1]}'", tokens[i][2])
-            args.append(tokens[i])
+        if instr == 'include':
+            # Malformed include that was not resolved at tokenization
+            error("'include' requires exactly one string argument: "
+                  '(include "file.spl")', instr_line)
+
+        if instr == 'macro':
+            # --- Macro definition: (macro name (body-instr args...)...) ---
+            if i >= n or tokens[i][0] != 'IDENT':
+                error("'macro' requires a name identifier", instr_line)
+            macro_name = tokens[i][1]
+            macro_line = tokens[i][2]
             i += 1
 
-        if i >= n:
-            error("unexpected end of file, expected ')'")
-        i += 1  # skip ')'
+            if macro_name in INSTRUCTIONS:
+                error(f"macro name '{macro_name}' conflicts with instruction", macro_line)
+            if macro_name in ('label', 'data', 'macro', 'include'):
+                error(f"macro name '{macro_name}' is a reserved word", macro_line)
+            if macro_name in macros:
+                error(f"duplicate macro '{macro_name}'", macro_line)
 
-        expressions.append((instr, args, instr_line))
+            body = []
+            while i < n and tokens[i][0] != 'RPAREN':
+                # Each body element is an S-expression: (instr args...)
+                if tokens[i][0] != 'LPAREN':
+                    error(f"expected '(' for macro body instruction, "
+                          f"got '{tokens[i][1]}'", tokens[i][2])
+                i += 1  # skip (
 
-    return expressions
+                if i >= n or tokens[i][0] != 'IDENT':
+                    error("expected instruction name in macro body",
+                          tokens[i][2] if i < n else instr_line)
+                body_instr = tokens[i][1]
+                body_line = tokens[i][2]
+                i += 1
+
+                body_args = []
+                while i < n and tokens[i][0] != 'RPAREN':
+                    if tokens[i][0] not in ('IDENT', 'NUMBER', 'STRING'):
+                        error(f"expected argument, got '{tokens[i][1]}'",
+                              tokens[i][2])
+                    body_args.append(tokens[i])
+                    i += 1
+
+                if i >= n:
+                    error("unexpected end of file in macro body, expected ')'")
+                i += 1  # skip ) closing body instruction
+
+                body.append((body_instr, body_args, body_line))
+
+            if i >= n:
+                error("unexpected end of file, expected ')' to close macro")
+            i += 1  # skip ) closing macro
+
+            if len(body) == 0:
+                error(f"macro '{macro_name}' has empty body", instr_line)
+
+            macros[macro_name] = body
+        else:
+            # --- Normal instruction ---
+            args = []
+            while i < n and tokens[i][0] != 'RPAREN':
+                if tokens[i][0] not in ('IDENT', 'NUMBER', 'STRING'):
+                    error(f"expected argument, got '{tokens[i][1]}'", tokens[i][2])
+                args.append(tokens[i])
+                i += 1
+
+            if i >= n:
+                error("unexpected end of file, expected ')'")
+            i += 1  # skip ')'
+
+            expressions.append((instr, args, instr_line))
+
+    return expressions, macros
+
+
+# ---------------------------------------------------------------------------
+# Macro expansion
+# ---------------------------------------------------------------------------
+
+def expand_macros(expressions, macros):
+    """Replace macro invocations with their body expressions."""
+    if not macros:
+        return expressions
+
+    MAX_DEPTH = 64
+
+    def expand(exprs, depth):
+        if depth > MAX_DEPTH:
+            error("macro expansion depth exceeded (possible infinite recursion)")
+        result = []
+        for instr, args, line in exprs:
+            if instr in macros:
+                if len(args) > 0:
+                    error(f"macro '{instr}' does not accept arguments", line)
+                body = macros[instr]
+                result.extend(expand(body, depth + 1))
+            else:
+                result.append((instr, args, line))
+        return result
+
+    return expand(expressions, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -350,8 +484,9 @@ def main():
         sys.exit(1)
 
     # Assemble
-    tokens = tokenize(source, input_path)
-    expressions = parse(tokens)
+    tokens = tokenize_with_includes(source, input_path)
+    expressions, macros = parse(tokens)
+    expressions = expand_macros(expressions, macros)
     bytecode, labels = assemble(expressions)
 
     # Write ROM

@@ -25,6 +25,31 @@ ASM_ERROR_TESTS = [
     ("(bogus)",             "unknown instruction"),
     ("(data my-data)",      "at least one data"),
     ("(data 123 45)",       "must be a label"),
+    # Macro errors
+    ("(macro push (push 1))",                    "conflicts with instruction"),
+    ("(macro foo (push 1))(macro foo (push 2))", "duplicate macro"),
+    ("(macro foo)",                              "empty body"),
+    # Include errors
+    ("(include)",                                "requires exactly one string"),
+    ("(include 42)",                             "requires exactly one string"),
+]
+
+# Macro functional tests: (label, source, expected_output)
+MACRO_TESTS = [
+    ("basic macro expansion",
+     '(macro print-A (push 65)(out 0x01))\n(print-A)\n(halt)',
+     "A"),
+    ("macro with multiple instructions",
+     '(macro print-AB (push 65)(out 0x01)(push 66)(out 0x01))\n(print-AB)\n(halt)',
+     "AB"),
+    ("multiple macro invocations",
+     '(macro emit-X (push 88)(out 0x01))\n(emit-X)\n(emit-X)\n(halt)',
+     "XX"),
+    ("nested macro expansion",
+     '(macro emit-A (push 65)(out 0x01))\n'
+     '(macro emit-AB (emit-A)(push 66)(out 0x01))\n'
+     '(emit-AB)\n(halt)',
+     "AB"),
 ]
 
 # VM runtime error cases: (source_text, expected_stderr_substring)
@@ -96,10 +121,22 @@ def vm_error(source):
             os.unlink(rom_path)
 
 
+def asm_and_run_source(source):
+    """Assemble and run inline source text. Returns (ok, stdout_str, error_msg)."""
+    with tempfile.NamedTemporaryFile(suffix=".spl", mode="w", delete=False, encoding="utf-8") as f:
+        f.write(source)
+        spl_path = f.name
+    try:
+        return asm_and_run(spl_path)
+    finally:
+        os.unlink(spl_path)
+
+
 def main():
     passed = 0
     failed = 0
-    total = 1 + len(ASM_ERROR_TESTS) + len(VM_ERROR_TESTS) + 2  # +2 = data bytecode tests
+    total = (1 + len(ASM_ERROR_TESTS) + len(VM_ERROR_TESTS) + 2
+             + len(MACRO_TESTS) + 1)  # +1 = include test
 
     print(f"Running {total} tests...\n")
 
@@ -176,6 +213,51 @@ def main():
             os.unlink(spl_path)
             if os.path.exists(rom_path):
                 os.unlink(rom_path)
+
+    # --- Macro functional tests ---
+    for label, source, expected_out in MACRO_TESTS:
+        ok, actual, err = asm_and_run_source(source)
+        if ok and actual == expected_out:
+            print(f"  PASS  macro: {label}")
+            passed += 1
+        else:
+            print(f"  FAIL  macro: {label}")
+            if err:
+                print(f"        error: {err}")
+            else:
+                print(f"        expected: {expected_out!r}")
+                print(f"        actual:   {actual!r}")
+            failed += 1
+
+    # --- Include functional test ---
+    tmpdir = tempfile.mkdtemp()
+    try:
+        # Create an includable file that defines a macro
+        inc_file = os.path.join(tmpdir, "lib.spl")
+        with open(inc_file, 'w', encoding='utf-8') as f:
+            f.write('(macro emit-H (push 72)(out 0x01))\n')
+
+        # Create main file that includes it and uses the macro
+        main_file = os.path.join(tmpdir, "main.spl")
+        with open(main_file, 'w', encoding='utf-8') as f:
+            f.write('(include "lib.spl")\n(emit-H)\n(halt)\n')
+
+        ok, actual, err = asm_and_run(main_file)
+        if ok and actual == "H":
+            print("  PASS  include: macro from included file")
+            passed += 1
+        else:
+            print("  FAIL  include: macro from included file")
+            if err:
+                print(f"        error: {err}")
+            else:
+                print(f"        expected: 'H'")
+                print(f"        actual:   {actual!r}")
+            failed += 1
+    finally:
+        for f in os.listdir(tmpdir):
+            os.unlink(os.path.join(tmpdir, f))
+        os.rmdir(tmpdir)
 
     # --- Summary ---
     print(f"\n{passed}/{total} passed", end="")

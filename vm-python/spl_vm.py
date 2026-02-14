@@ -257,6 +257,126 @@ class VideoSubsystem:
         elif port == 0x3C:
             self.clear_hi = val
 
+    def _read_u16_from_memory(self, memory, addr):
+        """Read 16-bit value from memory (little-endian: LO at addr, HI at addr+1)."""
+        lo = memory[addr] if addr < len(memory) else 0
+        hi = memory[addr + 1] if addr + 1 < len(memory) else 0
+        return lo | (hi << 8)
+
+    def rect_exec_with_memory(self, memory):
+        """Execute rectangle fill from parameter buffer at 0x0000-0x0009."""
+        x = self._read_u16_from_memory(memory, 0x0000)
+        y = self._read_u16_from_memory(memory, 0x0002)
+        w = self._read_u16_from_memory(memory, 0x0004)
+        h = self._read_u16_from_memory(memory, 0x0006)
+        color = self._read_u16_from_memory(memory, 0x0008)
+        self.rect_fill(memory, x, y, w, h, color)
+
+    def rect_fill(self, memory, x, y, w, h, color):
+        """Fill a rectangle at (x, y) with size (w, h) with the given color.
+
+        Handles both FB8 and FB16 modes with automatic clipping.
+        """
+        if self.mode == 0 or w <= 0 or h <= 0:
+            return
+
+        fb = self.fb_addr
+        stride = self.stride
+        video_w, video_h = self.width, self.height
+
+        # Clip to screen bounds
+        x1 = max(0, x)
+        y1 = max(0, y)
+        x2 = min(video_w, x + w)
+        y2 = min(video_h, y + h)
+
+        if x1 >= x2 or y1 >= y2:
+            return  # Completely off-screen
+
+        if self.mode == 1:  # FB8
+            color_byte = color & 0xFF
+            for yy in range(y1, y2):
+                base = fb + yy * stride
+                for xx in range(x1, x2):
+                    addr = base + xx
+                    if addr < len(memory):
+                        memory[addr] = color_byte
+
+        elif self.mode == 2:  # FB16
+            for yy in range(y1, y2):
+                base = fb + yy * stride
+                for xx in range(x1, x2):
+                    addr = base + 2 * xx
+                    if addr + 1 < len(memory):
+                        memory[addr] = color & 0xFF
+                        memory[addr + 1] = (color >> 8) & 0xFF
+
+    def line_exec_with_memory(self, memory):
+        """Execute line draw from parameter buffer at 0x0000-0x0009."""
+        x0 = self._read_u16_from_memory(memory, 0x0000)
+        y0 = self._read_u16_from_memory(memory, 0x0002)
+        x1 = self._read_u16_from_memory(memory, 0x0004)
+        y1 = self._read_u16_from_memory(memory, 0x0006)
+        color = self._read_u16_from_memory(memory, 0x0008)
+        self.bresenham_line(memory, x0, y0, x1, y1, color)
+
+    def bresenham_line(self, memory, x0, y0, x1, y1, color):
+        """Draw a line from (x0, y0) to (x1, y1) using Bresenham's algorithm.
+
+        Semi-open line: includes start point, excludes end point.
+        Automatically clips to screen bounds.
+        """
+        if self.mode == 0:
+            return
+
+        fb = self.fb_addr
+        stride = self.stride
+        video_w, video_h = self.width, self.height
+
+        # Clip coordinates to screen bounds
+        def clip_point(x, y):
+            return max(0, min(video_w - 1, x)), max(0, min(video_h - 1, y))
+
+        # Simple clipping: if both endpoints are outside on same side, skip
+        if (x0 < 0 and x1 < 0) or (x0 >= video_w and x1 >= video_w):
+            if (y0 < 0 and y1 < 0) or (y0 >= video_h and y1 >= video_h):
+                return
+
+        # Bresenham's algorithm
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x1 > x0 else -1
+        sy = 1 if y1 > y0 else -1
+        err = dx - dy
+
+        x, y = x0, y0
+
+        while True:
+            # Plot pixel if in bounds
+            if 0 <= x < video_w and 0 <= y < video_h:
+                if self.mode == 1:  # FB8
+                    addr = fb + y * stride + x
+                    if addr < len(memory):
+                        memory[addr] = color & 0xFF
+                elif self.mode == 2:  # FB16
+                    addr = fb + y * stride + 2 * x
+                    if addr + 1 < len(memory):
+                        memory[addr] = color & 0xFF
+                        memory[addr + 1] = (color >> 8) & 0xFF
+
+            # Check if we've reached the end point
+            if x == x1 and y == y1:
+                break
+
+            # Bresenham step
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            if e2 < dx:
+                err += dx
+                y += sy
+
     def get_port(self, port):
         if port == 0x39:    # VID_STATUS: vblank=1, fb-ready=1
             return 0x03 if self.mode != 0 else 0
@@ -536,6 +656,10 @@ class SPLVM:
             self.video.flip(self.memory)
         elif port == 0x3D:      # VID_CLEAR
             self.video.clear(self.memory)
+        elif port == 0x3E:      # RECT_EXEC
+            self.video.rect_exec_with_memory(self.memory)
+        elif port == 0x3F:      # LINE_EXEC
+            self.video.line_exec_with_memory(self.memory)
         elif 0x30 <= port <= 0x3C:  # Video config ports
             self.video.set_port(port, val)
         elif port == 0x77:      # MOUSE_CLEAR

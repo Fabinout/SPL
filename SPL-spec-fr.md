@@ -499,9 +499,10 @@ Un programme portable s’appuie sur **Core I/O** et **vérifie les capacités**
 |      0x3B | VID\_CLEAR\_COLOR\_LO | W   | Couleur LO                               |
 |      0x3C | VID\_CLEAR\_COLOR\_HI | W   | Couleur HI                               |
 |      0x3D | VID\_CLEAR            | W   | Clear écran (octet ignoré)               |
-| 0x3E–0x3F | Réservés              |     | Extensions futures                       |
+| 0x3E | RECT_EXEC             | W   | Exécute rectangle fill (octet ignoré)    |
+| 0x3F | LINE_EXEC             | W   | Exécute line draw (octet ignoré)         |
 
-**FB8** : 1 octet/pixel, palette **implémentation‑définie** (recommandé : **grayscale**).  
+**FB8** : 1 octet/pixel, palette **implémentation‑définie** (recommandé : **grayscale**).
 **FB16** : RGB565 (2 octets/pixel, en RAM **LO puis HI** pour chaque pixel).
 
 ## **12.3. Séquence d’initialisation**
@@ -534,6 +535,103 @@ Un programme portable s’appuie sur **Core I/O** et **vérifie les capacités**
 (push 0x00)   (out 0x3C)
 (push 1)      (out 0x3D)     ; clear
 (push 1)      (out 0x3A)     ; flip
+```
+
+## **12.6. Primitives graphiques (Drawing) — Port‑Mapped I/O**
+
+### 12.6.1. Modèle
+
+Les primitives graphiques utilisent une **zone mémoire partagée** pour les paramètres, puis des **ports pour déclencher l'exécution**.
+
+**Buffer de paramètres** (adresses `0x0000–0x0009` de la mémoire RAM):
+
+| Offset | Nom            | Description                           |
+| -----: | -------------- | ------------------------------------- |
+| 0x0000 | DRAW\_X\_LO    | Coordonnée X (16-bit, octet 0)        |
+| 0x0001 | DRAW\_X\_HI    | Coordonnée X (16-bit, octet 1)        |
+| 0x0002 | DRAW\_Y\_LO    | Coordonnée Y (16-bit, octet 0)        |
+| 0x0003 | DRAW\_Y\_HI    | Coordonnée Y (16-bit, octet 1)        |
+| 0x0004 | DRAW\_W\_LO    | Largeur (16-bit, octet 0)             |
+| 0x0005 | DRAW\_W\_HI    | Largeur (16-bit, octet 1)             |
+| 0x0006 | DRAW\_H\_LO    | Hauteur (16-bit, octet 0)             |
+| 0x0007 | DRAW\_H\_HI    | Hauteur (16-bit, octet 1)             |
+| 0x0008 | DRAW\_COLOR\_LO | Couleur (16-bit, octet 0, FB16/FB8)   |
+| 0x0009 | DRAW\_COLOR\_HI | Couleur (16-bit, octet 1)             |
+
+### 12.6.2. Rectangle fill
+
+Remplit un rectangle plein de la couleur spécifiée.
+
+**Séquence :**
+
+1. Initialiser la vidéo (`VID_MODE`, `VID_RES_*`, etc.)
+2. Écrire `X`, `Y`, `W`, `H`, `Color` dans le buffer (`0x0000–0x0009`)
+3. Écrire n'importe quelle valeur à port `0x3E`
+
+**Paramètres :**
+
+*   **X, Y** : coordonnées top-left du rectangle (16-bit, clippées à la résolution)
+*   **W, H** : largeur et hauteur en pixels (16-bit)
+*   **Color** : couleur (même format que la vidéo : 0–255 en FB8, RGB565 en FB16)
+
+**Notes :**
+
+*   Les rectang​les complètement hors-écran ne sont pas dessinés.
+*   Les rectangles partiellement hors-écran sont clippés.
+
+**Exemple (FB8, 320×240) :**
+
+```lisp
+; Rectangle blanc (255) à (50, 50), 100×100 pixels
+(push 50)   (store 0x0000)   ; X_LO = 50
+(push 0)    (store 0x0001)   ; X_HI = 0
+(push 50)   (store 0x0002)   ; Y_LO = 50
+(push 0)    (store 0x0003)   ; Y_HI = 0
+(push 100)  (store 0x0004)   ; W_LO = 100
+(push 0)    (store 0x0005)   ; W_HI = 0
+(push 100)  (store 0x0006)   ; H_LO = 100
+(push 0)    (store 0x0007)   ; H_HI = 0
+(push 255)  (store 0x0008)   ; Color = 255 (blanc)
+(push 0)    (store 0x0009)   ; Color HI = 0
+(push 1)    (out 0x3E)       ; Execute rectangle
+```
+
+### 12.6.3. Line drawing (Bresenham)
+
+Dessine une ligne entre deux points avec l'**algorithme Bresenham**.
+
+**Séquence :**
+
+1. Écrire `X0`, `Y0`, `X1`, `Y1`, `Color` dans le buffer
+2. Écrire n'importe quelle valeur à port `0x3F`
+
+**Paramètres :**
+
+*   **X0, Y0** : point de départ (16-bit, bits 0–1)
+*   **X1, Y1** : point d'arrivée (16-bit, bits 4–7)
+*   **Color** : couleur
+
+**Notes :**
+
+*   Ligne **semi-ouverte** : inclut le point start, exclut le point end.
+*   Clipping automatique aux limites de l'écran.
+*   Optimisé pour lignes longues.
+
+**Exemple :**
+
+```lisp
+; Ligne diagonale de (10, 10) à (100, 100) en blanc
+(push 10)   (store 0x0000)   ; X0 = 10
+(push 0)    (store 0x0001)   ; X0_HI = 0
+(push 10)   (store 0x0002)   ; Y0 = 10
+(push 0)    (store 0x0003)   ; Y0_HI = 0
+(push 100)  (store 0x0004)   ; X1 = 100
+(push 0)    (store 0x0005)   ; X1_HI = 0
+(push 100)  (store 0x0006)   ; Y1 = 100
+(push 0)    (store 0x0007)   ; Y1_HI = 0
+(push 255)  (store 0x0008)   ; Color = 255
+(push 0)    (store 0x0009)
+(push 1)    (out 0x3F)       ; Execute line
 ```
 
 ***

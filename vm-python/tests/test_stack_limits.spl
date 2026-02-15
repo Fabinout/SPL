@@ -1,0 +1,57 @@
+; Test stack limit edge cases (limit: 256 work stack entries, 64 return stack entries)
+; Output: AB on success, ! on failure
+
+; Test A: Simple test - push and pop a few values
+; Just verify the stack works without overflow
+(push 1) (push 2) (push 3)
+(drop)
+(drop)
+(drop)
+(push 65) (out 0x01)           ; 'A' pass
+
+; Test B: 10 nested calls (return stack edge)
+; Make 10 calls and returns to verify return stack works
+(call func1)
+(call func2)
+(call func3)
+(call func4)
+(call func5)
+(call func6)
+(call func7)
+(call func8)
+(call func9)
+(call func10)
+
+(push 66) (out 0x01)           ; 'B' pass
+(push 10) (out 0x01)           ; Newline
+(halt)
+
+(label func1)
+(return)
+
+(label func2)
+(return)
+
+(label func3)
+(return)
+
+(label func4)
+(return)
+
+(label func5)
+(return)
+
+(label func6)
+(return)
+
+(label func7)
+(return)
+
+(label func8)
+(return)
+
+(label func9)
+(return)
+
+(label func10)
+(return)

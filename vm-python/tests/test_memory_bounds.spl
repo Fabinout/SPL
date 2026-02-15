@@ -1,0 +1,64 @@
+; Test memory boundary access (direct and indirect)
+; Output: ABCD on success, ! on failure
+
+; Test A: Direct store and load at address 0x0000 (lowest address)
+(push 0xAA)
+(store 0x0000)
+
+(load 0x0000)
+(push 0xAA)
+(sub)
+(jump-if-zero test_a_pass)
+(push 33) (out 0x01)  ; '!' fail
+(halt)
+
+(label test_a_pass)
+(push 65) (out 0x01)  ; 'A' pass
+
+; Test B: Direct store and load at address 0xFFFF (highest address)
+(push 0xBB)
+(store 0xFFFF)
+
+(load 0xFFFF)
+(push 0xBB)
+(sub)
+(jump-if-zero test_b_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_b_pass)
+(push 66) (out 0x01)  ; 'B' pass
+
+; Test C: Indirect load from address 0x0000
+(push 0xCC)
+(store 0x0000)
+
+(push 0x00)           ; Address hi
+(push 0x00)           ; Address lo
+(load-indirect)
+(push 0xCC)
+(sub)
+(jump-if-zero test_c_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_c_pass)
+(push 67) (out 0x01)  ; 'C' pass
+
+; Test D: Indirect store to address 0xFFFF, then load directly
+(push 0xDD)           ; Value
+(push 0xFF)           ; Address hi
+(push 0xFF)           ; Address lo
+(store-indirect)
+
+(load 0xFFFF)
+(push 0xDD)
+(sub)
+(jump-if-zero all_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label all_pass)
+(push 68) (out 0x01)  ; 'D' pass
+(push 10) (out 0x01)  ; Newline
+(halt)

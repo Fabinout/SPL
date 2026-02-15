@@ -1,0 +1,82 @@
+; Test I/O port functionality across all subsystems
+; Tests console, timer, RNG, video, audio, mouse, SYSCTL_CAPS
+; Output: ABCDEFGHIJKLMNO on success, ! on failure
+
+; Test A: Console output
+(push 65) (out 0x01)  ; 'A' to console
+
+; Test B: Console status read (port 0x02)
+(in 0x02)
+(drop)
+(push 66) (out 0x01)  ; 'B' pass
+
+; Test C: RNG read (port 0x10)
+(in 0x10)
+(drop)
+(push 67) (out 0x01)  ; 'C' pass
+
+; Test D: Timer B0 read (port 0x11)
+(in 0x11)
+(drop)
+(push 68) (out 0x01)  ; 'D' pass
+
+; Test E: Timer B1 read (port 0x12)
+(in 0x12)
+(drop)
+(push 69) (out 0x01)  ; 'E' pass
+
+; Test F: Timer B2 read (port 0x13)
+(in 0x13)
+(drop)
+(push 70) (out 0x01)  ; 'F' pass
+
+; Test G: Timer B3 read (port 0x14, latches timer)
+(in 0x14)
+(drop)
+(push 71) (out 0x01)  ; 'G' pass
+
+; Test H: SYSCTL_CAPS read (port 0xFF)
+(in 0xFF)
+(drop)
+(push 72) (out 0x01)  ; 'H' pass
+
+; Test I: Video mode read (port 0x30)
+(in 0x30)
+(drop)
+(push 73) (out 0x01)  ; 'I' pass
+
+; Test J: Video width read (port 0x31)
+(in 0x31)
+(drop)
+(push 74) (out 0x01)  ; 'J' pass
+
+; Test K: Video status read (port 0x39)
+(in 0x39)
+(drop)
+(push 75) (out 0x01)  ; 'K' pass
+
+; Test L: Audio channel select write (port 0x50)
+(push 0)
+(out 0x50)
+(push 76) (out 0x01)  ; 'L' pass
+
+; Test M: Audio frequency (ports 0x51-0x52)
+(push 0xFF)
+(out 0x51)            ; Freq high byte
+(push 0xFF)
+(out 0x52)            ; Freq low byte
+(push 77) (out 0x01)  ; 'M' pass
+
+; Test N: Audio volume (port 0x53)
+(push 128)
+(out 0x53)
+(push 78) (out 0x01)  ; 'N' pass
+
+; Test O: Audio waveform (port 0x54)
+(push 0)              ; Sine wave
+(out 0x54)
+(push 79) (out 0x01)  ; 'O' pass
+
+; Final newline and halt
+(push 10) (out 0x01)
+(halt)

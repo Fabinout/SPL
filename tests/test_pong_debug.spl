@@ -1,0 +1,88 @@
+; DEBUG VERSION - Print paddle position and keyboard state to console
+
+(label init-video)
+(push 1) (out 0x30)
+(push 0xA0) (out 0x31)
+(push 0x00) (out 0x32)
+(push 0x78) (out 0x33)
+(push 0x00) (out 0x34)
+(push 0xA0) (out 0x35)
+(push 0x00) (out 0x36)
+(push 0x00) (out 0x37)
+(push 0x80) (out 0x38)
+
+; Initialize paddle at y=48
+(push 48) (store 0x01)
+
+(label loop)
+
+; Print "Y:"
+(push 89) (out 0x01)  ; Y
+(push 58) (out 0x01)  ; :
+(push 32) (out 0x01)  ; space
+
+; Print paddle Y value
+(load 0x01)
+(push 10) (div)  ; tens digit
+(push 48) (add)  ; convert to ASCII
+(out 0x01)
+
+(load 0x01)
+(push 10) (mod)  ; ones digit
+(push 48) (add)  ; convert to ASCII
+(out 0x01)
+
+; Print space
+(push 32) (out 0x01)
+
+; Print "UP="
+(push 85) (out 0x01)  ; U
+(push 80) (out 0x01)  ; P
+(push 61) (out 0x01)  ; =
+
+(in 0x24)
+(push 48) (add)  ; convert 0/1 to ASCII
+(out 0x01)
+
+; Print space
+(push 32) (out 0x01)
+
+; Print "DN="
+(push 68) (out 0x01)  ; D
+(push 78) (out 0x01)  ; N
+(push 61) (out 0x01)  ; =
+
+(in 0x25)
+(push 48) (add)
+(out 0x01)
+
+; Newline
+(push 10) (out 0x01)
+
+; Read keyboard and update Y
+(in 0x24)
+(jump-if-zero skip-up-debug)
+  (load 0x01)
+  (push 2) (sub)
+  (store 0x01)
+(label skip-up-debug)
+
+(in 0x25)
+(jump-if-zero skip-down-debug)
+  (load 0x01)
+  (push 2) (add)
+  (store 0x01)
+(label skip-down-debug)
+
+; Delay: just repeat the loop some times
+(push 0)
+(label delay)
+(push 1) (add)
+(dup)
+(push 50)
+(lt)
+(jump-if-not-zero delay)
+(drop)  ; drop the final counter value
+
+; Loop
+(jump loop)

@@ -1,0 +1,65 @@
+; PONG - SIMPLE VERSION
+; Just one paddle on the left, black screen background
+; No ball, no AI, no physics - just display and input
+
+(label main)
+
+; Setup video (160x120 FB8 at 0x8000)
+(push 1) (out 0x30)          ; Mode: FB8
+(push 0xA0) (out 0x31)       ; Width LO = 160
+(push 0x00) (out 0x32)       ; Width HI
+(push 0x78) (out 0x33)       ; Height LO = 120
+(push 0x00) (out 0x34)       ; Height HI
+(push 0xA0) (out 0x35)       ; Stride LO = 160
+(push 0x00) (out 0x36)       ; Stride HI
+(push 0x00) (out 0x37)       ; FB addr LO = 0x8000
+(push 0x80) (out 0x38)       ; FB addr HI
+
+; Initialize paddle position: x=10, y=48
+(push 10) (store 0x00)
+(push 48) (store 0x01)
+
+(label game-loop)
+
+; Clear screen (black)
+(push 1) (out 0x3D)
+
+; Read UP key and move paddle
+(in 0x24)
+(push 1) (and)
+(jump-if-zero skip-up)
+  (load 0x01)
+  (push 3) (sub)
+  (store 0x01)
+(label skip-up)
+
+; Read DOWN key and move paddle
+(in 0x25)
+(push 1) (and)
+(jump-if-zero skip-down)
+  (load 0x01)
+  (push 3) (add)
+  (store 0x01)
+(label skip-down)
+
+; Draw single paddle: 4 wide, 24 tall, white
+; Position: 0x00 (x), 0x01 (y)
+(load 0x00) (store 0x0000)   ; x_lo
+(push 0) (store 0x0001)       ; x_hi
+(load 0x01) (store 0x0002)   ; y_lo
+(push 0) (store 0x0003)       ; y_hi
+(push 4) (store 0x0004)       ; width
+(push 0) (store 0x0005)       ; width_hi
+(push 24) (store 0x0006)      ; height
+(push 0) (store 0x0007)       ; height_hi
+(push 255) (store 0x0008)     ; color (white)
+(push 0) (store 0x0009)       ; color_hi
+
+; Execute rectangle fill
+(push 1) (out 0x3E)
+
+; Flip display
+(push 1) (out 0x3A)
+
+; Loop
+(jump game-loop)

@@ -47,13 +47,13 @@
 (push 0x00) (out 0x3C)
 
 ; Initialize game state in memory
-; Player paddle: x=76, y=92
-(push 76) (store 0x00)
-(push 92) (store 0x01)
+; Player paddle (LEFT side): x=8, y=48 (middle vertically)
+(push 8) (store 0x00)
+(push 48) (store 0x01)
 
-; AI paddle: x=76, y=4
-(push 76) (store 0x02)
-(push 4) (store 0x03)
+; AI paddle (RIGHT side): x=148, y=48
+(push 148) (store 0x02)
+(push 48) (store 0x03)
 
 ; Ball: x=78, y=58
 (push 78) (store 0x04)
@@ -100,20 +100,50 @@
 (add)
 (store 0x05)
 
-; Simple wall bounce: if x < 4 or x > 152, reverse vx
-(load 0x04)
-(push 4) (lt)
-(jump-if-zero check-right)
-  (load 0x06) (push 255) (add) (store 0x06)  ; vx = -vx
+; Check collision with LEFT paddle (player)
+; Paddle at x=8, y=48, size 4x24
+; Ball at x, y, size 4x4
+; Collision if: ball.x+4 > 8 AND ball.x < 12 AND ball.y+4 > 48 AND ball.y < 72
+(load 0x04)        ; ball.x
+(push 4) (add)     ; ball.x + 4
+(push 12) (lt)     ; ball.x + 4 < 12?
+(jump-if-zero check-right-paddle)
+  ; Check other conditions
+  (load 0x04)
+  (push 8) (gt)    ; ball.x > 8?
+  (jump-if-zero check-right-paddle)
+  (load 0x05)
+  (push 4) (add)
+  (push 48) (gt)   ; ball.y + 4 > 48?
+  (jump-if-zero check-right-paddle)
+  (load 0x05)
+  (push 72) (lt)   ; ball.y < 72?
+  (jump-if-zero check-right-paddle)
+  ; COLLISION! Reverse X velocity
+  (load 0x06) (push 255) (add) (store 0x06)
   (jump check-y)
-(label check-right)
 
+(label check-right-paddle)
+; Check collision with RIGHT paddle (AI)
+; Paddle at x=148, y=48, size 4x24
 (load 0x04)
-(push 152) (gt)
+(push 4) (add)
+(push 152) (gt)    ; ball.x + 4 > 152?
 (jump-if-zero check-y)
-  (load 0x06) (push 255) (add) (store 0x06)  ; vx = -vx
+  (load 0x04)
+  (push 148) (lt)  ; ball.x < 148?
+  (jump-if-zero check-y)
+  (load 0x05)
+  (push 4) (add)
+  (push 48) (gt)   ; ball.y + 4 > 48?
+  (jump-if-zero check-y)
+  (load 0x05)
+  (push 72) (lt)   ; ball.y < 72?
+  (jump-if-zero check-y)
+  ; COLLISION! Reverse X velocity
+  (load 0x06) (push 255) (add) (store 0x06)
 
-; If y < 4 or y > 112, reverse vy
+; Check Y wall collisions (top/bottom)
 (label check-y)
 (load 0x05)
 (push 4) (lt)

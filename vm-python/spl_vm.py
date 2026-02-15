@@ -426,7 +426,7 @@ class VideoSubsystem:
         # Create window on first flip
         if self._root is None:
             self._root = tk.Tk()
-            self._root.title("SPL Video")
+            self._root.title("SPL Video - Click window for keyboard focus")
             self._root.resizable(False, False)
             self._canvas = tk.Canvas(
                 self._root, width=w * scale, height=h * scale,
@@ -435,6 +435,9 @@ class VideoSubsystem:
             self._canvas.pack()
             self._bind_mouse()
             self.mouse_status = 0x01  # mouse present
+            # Give keyboard focus to the window
+            self._root.focus_set()
+            self._root.focus_force()
 
         # Build the image row by row
         photo = tk.PhotoImage(width=w, height=h)

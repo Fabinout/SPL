@@ -135,11 +135,11 @@ Chaque prompt est écrit pour être utilisé directement avec un LLM ou Claude C
 - [x] Phase 3 complétée ✅
 - [ ] Phase 4 complétée (skipped — optional)
 - [x] Phase 5.1 complétée ✅ (T5.1: Pong game created)
-- [ ] Phase 5.2 complétée (T5.2: Testing)
+- [x] Phase 5.2 complétée ✅ (T5.2: Testing & bugfixing)
 - [ ] Phase 6 complétée
 
 **Date de création:** 2026-02-14
-**Dernier update:** 2026-02-15 (Phase 5.1 completed — Pong example)
+**Dernier update:** 2026-02-15 (Phase 5.2 completed — Bugs fixed)
 
 **Résultats Phase 1:**
 - ✅ T1.1: Vidéo (160×120 monochrome) — Spec existante compatible
@@ -170,3 +170,18 @@ Chaque prompt est écrit pour être utilisé directement avec un LLM ou Claude C
   - Sync après VID_FLIP (port 0x3A)
   - Méthode: `_sync_frame_60fps()` avec time.monotonic()
   - Test: tests/test_keyboard_polling.spl assemblé et validé
+
+**Résultats Phase 5.1:**
+- ✅ T5.1: Jeu Pong complet créé
+  - 207 instructions, 461 bytes
+  - Initialisation vidéo 160×120 FB8
+  - État du jeu en mémoire (2 paddles, 1 balle)
+  - Boucle principale: input → physics → collisions → render → flip
+
+**Résultats Phase 5.2:**
+- ✅ T5.2: Débogage et correctifs
+  - **Bug #1:** Paddles à même X → Repositionné (left: x=8, right: x=148)
+  - **Bug #2:** Pas de collision paddle → Ajouté AABB detection (+32 instr)
+  - **Bug #3:** Clavier ne répond pas → Ajouté focus_set() et focus_force()
+  - 28/28 tests passant (incluant 6 nouveaux tests)
+  - PONG-BUGFIX.md: Documentation complète des fixes

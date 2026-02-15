@@ -232,6 +232,11 @@ class VideoSubsystem:
         self.mouse_buttons = 0
         self.mouse_wheel = 0
         self.mouse_status = 0
+        # Keyboard state (polling mode for Pong)
+        self.key_up = 0
+        self.key_down = 0
+        self.key_left = 0
+        self.key_right = 0
 
     def set_port(self, port, val):
         if port == 0x30:
@@ -484,6 +489,34 @@ class VideoSubsystem:
         self._canvas.bind("<Button-3>", lambda e: self._on_mouse_btn(e, True))
         self._canvas.bind("<ButtonRelease-3>", lambda e: self._on_mouse_btn(e, False))
         self._canvas.bind("<MouseWheel>", self._on_mouse_wheel)
+
+        # Keyboard bindings for directional input (polling mode)
+        self._root.bind("<Up>", lambda e: self._on_key_down("up"))
+        self._root.bind("<Down>", lambda e: self._on_key_down("down"))
+        self._root.bind("<Left>", lambda e: self._on_key_down("left"))
+        self._root.bind("<Right>", lambda e: self._on_key_down("right"))
+        self._root.bind("<w>", lambda e: self._on_key_down("up"))
+        self._root.bind("<W>", lambda e: self._on_key_down("up"))
+        self._root.bind("<s>", lambda e: self._on_key_down("down"))
+        self._root.bind("<S>", lambda e: self._on_key_down("down"))
+        self._root.bind("<a>", lambda e: self._on_key_down("left"))
+        self._root.bind("<A>", lambda e: self._on_key_down("left"))
+        self._root.bind("<d>", lambda e: self._on_key_down("right"))
+        self._root.bind("<D>", lambda e: self._on_key_down("right"))
+
+        self._root.bind("<KeyRelease-Up>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-Down>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-Left>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-Right>", lambda e: self._on_key_up("right"))
+        self._root.bind("<KeyRelease-w>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-W>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-s>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-S>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-a>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-A>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-d>", lambda e: self._on_key_up("right"))
+        self._root.bind("<KeyRelease-D>", lambda e: self._on_key_up("right"))
+
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _on_mouse_motion(self, event):
@@ -503,11 +536,45 @@ class VideoSubsystem:
         delta = event.delta // 120
         self.mouse_wheel = max(-128, min(127, self.mouse_wheel + delta))
 
+    def _on_key_down(self, key):
+        """Handle key press for polling."""
+        if key == "up":
+            self.key_up = 1
+        elif key == "down":
+            self.key_down = 1
+        elif key == "left":
+            self.key_left = 1
+        elif key == "right":
+            self.key_right = 1
+
+    def _on_key_up(self, key):
+        """Handle key release for polling."""
+        if key == "up":
+            self.key_up = 0
+        elif key == "down":
+            self.key_down = 0
+        elif key == "left":
+            self.key_left = 0
+        elif key == "right":
+            self.key_right = 0
+
     def _on_close(self):
         self._closed = True
         if self._root:
             self._root.destroy()
             self._root = None
+
+    def get_keyboard_port(self, port):
+        """Get keyboard polling state (0x24-0x27)."""
+        if port == 0x24:  # KBD_KEY_UP
+            return self.key_up
+        elif port == 0x25:  # KBD_KEY_DOWN
+            return self.key_down
+        elif port == 0x26:  # KBD_KEY_LEFT
+            return self.key_left
+        elif port == 0x27:  # KBD_KEY_RIGHT
+            return self.key_right
+        return 0
 
     def get_mouse_port(self, port):
         if port == 0x70: return self.mouse_x & 0xFF
@@ -559,6 +626,10 @@ class SPLVM:
 
         # Audio
         self.audio = AudioSubsystem()
+
+        # Frame timing for 60 FPS (16.67 ms per frame)
+        self.frame_target_ms = 1000.0 / 60.0  # ~16.67 ms
+        self.last_frame_time = time.monotonic()
 
     # --- Stack operations ---
 
@@ -630,6 +701,9 @@ class SPLVM:
             self.time_latch = None
             return t & 0xFF
 
+        elif 0x24 <= port <= 0x27:  # Keyboard polling (UP, DOWN, LEFT, RIGHT)
+            return self.video.get_keyboard_port(port)
+
         elif 0x30 <= port <= 0x3F:  # Video
             return self.video.get_port(port)
 
@@ -654,6 +728,7 @@ class SPLVM:
 
         elif port == 0x3A:      # VID_FLIP
             self.video.flip(self.memory)
+            self._sync_frame_60fps()  # Sync to 60 FPS after each flip
         elif port == 0x3D:      # VID_CLEAR
             self.video.clear(self.memory)
         elif port == 0x3E:      # RECT_EXEC
@@ -677,6 +752,21 @@ class SPLVM:
     def _get_time_ms(self):
         elapsed_ns = time.monotonic_ns() - self.start_time_ns
         return (elapsed_ns // 1_000_000) & 0xFFFFFFFF
+
+    def _sync_frame_60fps(self):
+        """Sync frame timing to target 60 FPS (~16.67 ms per frame).
+
+        Called after VID_FLIP to ensure the game loop doesn't run faster than 60 FPS.
+        """
+        current_time = time.monotonic()
+        elapsed_ms = (current_time - self.last_frame_time) * 1000.0
+        sleep_ms = self.frame_target_ms - elapsed_ms
+
+        if sleep_ms > 0:
+            time.sleep(sleep_ms / 1000.0)
+            self.last_frame_time = time.monotonic()
+        else:
+            self.last_frame_time = current_time
 
     # --- Execution ---
 

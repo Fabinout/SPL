@@ -1,0 +1,72 @@
+; Test keyboard polling ports (0x24-0x27)
+; Initializes video and polls keyboard input continuously
+
+(label init-video)
+; Set video mode to FB8 (1)
+(push 1) (out 0x30)
+
+; Set resolution 160x120
+(push 0xA0) (out 0x31)  ; width LO = 160
+(push 0x00) (out 0x32)  ; width HI
+(push 0x78) (out 0x33)  ; height LO = 120
+(push 0x00) (out 0x34)  ; height HI
+
+; Set stride to 160
+(push 0xA0) (out 0x35)  ; stride LO
+(push 0x00) (out 0x36)  ; stride HI
+
+; Set framebuffer address to 0x8000
+(push 0x00) (out 0x37)  ; FB_ADDR LO = 0x8000
+(push 0x80) (out 0x38)  ; FB_ADDR HI
+
+; Set clear color to 0 (black)
+(push 0x00) (out 0x3B)  ; clear color LO
+(push 0x00) (out 0x3C)  ; clear color HI
+
+; Clear screen
+(push 1) (out 0x3D)
+
+; Flip display
+(push 1) (out 0x3A)
+
+(label poll-loop)
+; Poll UP key (0x24)
+(in 0x24)
+(push 1) (and)
+(jump-if-zero skip-up)
+  (push 72) (out 0x01)  ; print 'H'
+(label skip-up)
+
+; Poll DOWN key (0x25)
+(in 0x25)
+(push 1) (and)
+(jump-if-zero skip-down)
+  (push 68) (out 0x01)  ; print 'D'
+(label skip-down)
+
+; Poll LEFT key (0x26)
+(in 0x26)
+(push 1) (and)
+(jump-if-zero skip-left)
+  (push 76) (out 0x01)  ; print 'L'
+(label skip-left)
+
+; Poll RIGHT key (0x27)
+(in 0x27)
+(push 1) (and)
+(jump-if-zero skip-right)
+  (push 82) (out 0x01)  ; print 'R'
+(label skip-right)
+
+; Simple delay loop (~100 iterations ≈ 16-20ms)
+(push 0) (label delay-loop)
+(push 1) (add)
+(push 100)
+(over)
+(swap)
+(lt)
+(jump-if-not-zero delay-loop)
+(drop) (drop)
+
+; Jump back to poll loop
+(jump poll-loop)

@@ -1,0 +1,179 @@
+; PONG - A minimal Pong game for SPL
+;
+; Controls:
+;   UP/W   - Move paddle up
+;   DOWN/S - Move paddle down
+;
+; Game rules:
+;   - 2 paddles (player bottom, AI top)
+;   - 1 ball bouncing around
+;   - Collision with paddles and walls
+;   - 160x120 monochrome display, 60 FPS
+
+; MEMORY LAYOUT (0x0000 onwards):
+; 0x00: player.x (paddle position X)
+; 0x01: player.y (paddle position Y)
+; 0x02: ai.x
+; 0x03: ai.y
+; 0x04: ball.x (8-bit)
+; 0x05: ball.y (8-bit)
+; 0x06: ball.vx (velocity X, signed 8-bit)
+; 0x07: ball.vy (velocity Y, signed 8-bit)
+; 0x08-0x0A: temp values for rect drawing
+;
+; Constants:
+; - Paddle width: 4, height: 24
+; - Ball size: 4x4
+; - Screen: 160x120
+; - FB base: 0x8000
+
+; ============================================================================
+; INITIALIZATION & MAIN LOOP
+; ============================================================================
+
+(label main)
+
+; Setup video (160x120 FB8 at 0x8000)
+(push 1) (out 0x30)          ; Mode: FB8
+(push 0xA0) (out 0x31)       ; Width LO = 160
+(push 0x00) (out 0x32)       ; Width HI
+(push 0x78) (out 0x33)       ; Height LO = 120
+(push 0x00) (out 0x34)       ; Height HI
+(push 0xA0) (out 0x35)       ; Stride LO = 160
+(push 0x00) (out 0x36)       ; Stride HI
+(push 0x00) (out 0x37)       ; FB addr LO = 0x8000
+(push 0x80) (out 0x38)       ; FB addr HI
+(push 0x00) (out 0x3B)       ; Clear color black
+(push 0x00) (out 0x3C)
+
+; Initialize game state in memory
+; Player paddle: x=76, y=92
+(push 76) (store 0x00)
+(push 92) (store 0x01)
+
+; AI paddle: x=76, y=4
+(push 76) (store 0x02)
+(push 4) (store 0x03)
+
+; Ball: x=78, y=58
+(push 78) (store 0x04)
+(push 58) (store 0x05)
+
+; Ball velocity: vx=1, vy=1
+(push 1) (store 0x06)
+(push 1) (store 0x07)
+
+; ============================================================================
+; MAIN GAME LOOP
+; ============================================================================
+
+(label game-loop)
+
+; Clear screen
+(push 1) (out 0x3D)
+
+; Read keyboard and move player paddle
+(in 0x24)  ; UP key
+(push 1) (and)
+(jump-if-zero skip-up)
+  (load 0x01)
+  (push 2) (sub)
+  (store 0x01)
+(label skip-up)
+
+(in 0x25)  ; DOWN key
+(push 1) (and)
+(jump-if-zero skip-down)
+  (load 0x01)
+  (push 2) (add)
+  (store 0x01)
+(label skip-down)
+
+; Update ball position
+(load 0x04)
+(load 0x06)
+(add)
+(store 0x04)
+
+(load 0x05)
+(load 0x07)
+(add)
+(store 0x05)
+
+; Simple wall bounce: if x < 4 or x > 152, reverse vx
+(load 0x04)
+(push 4) (lt)
+(jump-if-zero check-right)
+  (load 0x06) (push 255) (add) (store 0x06)  ; vx = -vx
+  (jump check-y)
+(label check-right)
+
+(load 0x04)
+(push 152) (gt)
+(jump-if-zero check-y)
+  (load 0x06) (push 255) (add) (store 0x06)  ; vx = -vx
+
+; If y < 4 or y > 112, reverse vy
+(label check-y)
+(load 0x05)
+(push 4) (lt)
+(jump-if-zero check-y-bottom)
+  (load 0x07) (push 255) (add) (store 0x07)
+  (jump draw-game)
+(label check-y-bottom)
+
+(load 0x05)
+(push 112) (gt)
+(jump-if-zero draw-game)
+  (load 0x07) (push 255) (add) (store 0x07)
+
+; ============================================================================
+; RENDER
+; ============================================================================
+
+(label draw-game)
+
+; Draw player paddle at (0x00, 0x01), size 4x24, white
+(load 0x00) (store 0x0000)
+(push 0) (store 0x0001)
+(load 0x01) (store 0x0002)
+(push 0) (store 0x0003)
+(push 4) (store 0x0004)
+(push 0) (store 0x0005)
+(push 24) (store 0x0006)
+(push 0) (store 0x0007)
+(push 255) (store 0x0008)
+(push 0) (store 0x0009)
+(push 1) (out 0x3E)  ; RECT_EXEC
+
+; Draw AI paddle at (0x02, 0x03), size 4x24, white
+(load 0x02) (store 0x0000)
+(push 0) (store 0x0001)
+(load 0x03) (store 0x0002)
+(push 0) (store 0x0003)
+(push 4) (store 0x0004)
+(push 0) (store 0x0005)
+(push 24) (store 0x0006)
+(push 0) (store 0x0007)
+(push 255) (store 0x0008)
+(push 0) (store 0x0009)
+(push 1) (out 0x3E)  ; RECT_EXEC
+
+; Draw ball at (0x04, 0x05), size 4x4, white
+(load 0x04) (store 0x0000)
+(push 0) (store 0x0001)
+(load 0x05) (store 0x0002)
+(push 0) (store 0x0003)
+(push 4) (store 0x0004)
+(push 0) (store 0x0005)
+(push 4) (store 0x0006)
+(push 0) (store 0x0007)
+(push 255) (store 0x0008)
+(push 0) (store 0x0009)
+(push 1) (out 0x3E)  ; RECT_EXEC
+
+; Flip display (60 FPS sync automatic)
+(push 1) (out 0x3A)
+
+; Loop back
+(jump game-loop)

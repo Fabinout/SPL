@@ -634,6 +634,201 @@ Dessine une ligne entre deux points avec l'**algorithme Bresenham**.
 (push 1)    (out 0x3F)       ; Execute line
 ```
 
+## **12.7. Dessin et géométrie — Patterns recommandés**
+
+Cette section documente les **patterns courants** pour implémenter des primitives de dessin sans opcodes dédiés (approche software, ou complément aux ports 0x3E/0x3F).
+
+### 12.7.1. Dessiner un point (pixel)
+
+**Pattern :**
+
+```lisp
+; Paramètres (passer en arguments ou charger depuis RAM)
+; x = 0 à 159 (160×120)
+; y = 0 à 119
+; framebuffer base = 0x8000
+; color = 0xFF (blanc) ou 0x00 (noir)
+
+; Adresse = framebuffer_base + y * 160 + x
+(push 0x80)        ; FB base HI
+(push 0x00)        ; FB base LO
+(push y_value)     ; charger Y
+(push 160)
+(mul)              ; Y * 160
+(add)              ; base + Y*160
+(push x_value)     ; charger X
+(add)              ; + X
+(push 0xFF)        ; couleur (blanc)
+(store addr)       ; pixel[x,y] = 0xFF
+```
+
+### 12.7.2. Dessiner un rectangle rempli (boucles imbriquées)
+
+**Pattern (sans utiliser port 0x3E) :**
+
+```lisp
+; Paramètres
+; x, y = coin supérieur gauche
+; w, h = largeur, hauteur
+; color = 0xFF ou 0x00
+
+(label rect-fill)
+  ; y-loop
+  (push y_top)
+  (label rect-y-loop)
+  (push y_bottom) (over) (swap) (lt)
+  (jump-if-zero rect-y-end)
+
+    ; x-loop
+    (push x_left)
+    (label rect-x-loop)
+    (push x_right) (over) (swap) (lt)
+    (jump-if-zero rect-x-end)
+
+      ; Dessiner pixel[x, y]
+      ; addr = 0x8000 + y * 160 + x
+      (push 0x8000)
+      (over)  ; y
+      (push 160) (mul) (add)
+      (swap)  ; x
+      (add)
+      (push 0xFF) (store addr)  ; pixel = blanc
+
+      (push 1) (add)  ; x++
+    (jump rect-x-loop)
+    (label rect-x-end)
+    (drop)  ; nettoyer x
+
+    (push 1) (add)  ; y++
+  (jump rect-y-loop)
+  (label rect-y-end)
+  (drop)  ; nettoyer y
+```
+
+**Simplifié (avec 2 boucles) :**
+
+```lisp
+(macro draw-filled-rect (x y width height color)
+  ; Boucle y
+  (push 0)
+  (label rect-y)
+  (dup) (push height) (lt)
+  (jump-if-not-zero rect-y-body)
+  (jump rect-y-end)
+  (label rect-y-body)
+    ; Boucle x
+    (push 0)
+    (label rect-x)
+    (dup) (push width) (lt)
+    (jump-if-not-zero rect-x-body)
+    (jump rect-x-end)
+    (label rect-x-body)
+      ; Calculer offset = y*160 + x + fb_base
+      ; (écrire pixel)
+      (push 1) (add)  ; x++
+    (jump rect-x)
+    (label rect-x-end)
+    (drop)
+    (push 1) (add)  ; y++
+  (jump rect-y)
+  (label rect-y-end)
+  (drop)
+)
+```
+
+### 12.7.3. Détection collision rectangle-rectangle
+
+**Algorithme AABB (Axis-Aligned Bounding Box) :**
+
+Deux rectangles **r1** et **r2** se chevauchent si et seulement si :
+
+```
+r1.x1 < r2.x2  AND  r1.x2 > r2.x1  AND
+r1.y1 < r2.y2  AND  r1.y2 > r2.y1
+```
+
+**Pattern SPL :**
+
+```lisp
+; Paramètres (charger en stack ou RAM)
+; r1: x1, y1, x2, y2 (coin haut-gauche et bas-droit)
+; r2: x1, y1, x2, y2
+
+(macro check-collision-aabb (r1x1 r1y1 r1x2 r1y2 r2x1 r2y1 r2x2 r2y2)
+  ; r1.x1 < r2.x2 ?
+  (push r1x1) (push r2x2) (lt)
+  (jump-if-zero no-collision)
+
+  ; r1.x2 > r2.x1 ?
+  (push r1x2) (push r2x1) (gt)
+  (jump-if-zero no-collision)
+
+  ; r1.y1 < r2.y2 ?
+  (push r1y1) (push r2y2) (lt)
+  (jump-if-zero no-collision)
+
+  ; r1.y2 > r2.y1 ?
+  (push r1y2) (push r2y1) (gt)
+  (jump-if-zero no-collision)
+
+  ; Collision détectée
+  (push 1) (jump collision-end)
+  (label no-collision)
+  (push 0)
+  (label collision-end)
+)
+```
+
+**Résultat :** 1 = collision, 0 = pas de collision.
+
+### 12.7.4. Exemple : Pong (déplacer une palette)
+
+```lisp
+; Initialiser paddle
+(push 75)      (store 0xFFC0)  ; paddle_x
+(push 50)      (store 0xFFC1)  ; paddle_y
+(push 10)      (store 0xFFC2)  ; paddle_w
+(push 30)      (store 0xFFC3)  ; paddle_h
+(push 3)       (store 0xFFC4)  ; paddle speed
+
+(label game-loop)
+
+; Lire touches et déplacer
+(in 0x24)  ; UP ?
+(jump-if-zero skip-move-up)
+  (load 0xFFC1) (push 3) (sub) (store 0xFFC1)  ; y -= 3
+(label skip-move-up)
+
+(in 0x25)  ; DOWN ?
+(jump-if-zero skip-move-down)
+  (load 0xFFC1) (push 3) (add) (store 0xFFC1)  ; y += 3
+(label skip-move-down)
+
+; Effacer ancienne paddle (remplir avec noir)
+(load 0xFFC0) (load 0xFFC1)
+(load 0xFFC2) (load 0xFFC3)
+; ... dessiner rectangle noir ...
+
+; Redessiner paddle (blanc)
+(load 0xFFC0) (load 0xFFC1)
+(load 0xFFC2) (load 0xFFC3)
+; ... dessiner rectangle blanc ...
+
+; Attendre frame (~16ms)
+; ...
+
+(jump game-loop)
+```
+
+**Notes :**
+
+*   Ces patterns sont **optimisables** pour une VM réelle (boucles non-déroulées, registres, etc.)
+*   **Macros recommandées** pour Pong :
+    - `(draw-rect x y w h color)` → déplier en boucles imbriquées
+    - `(draw-pixel x y color)` → calcul direct d'adresse
+    - `(check-aabb r1 r2)` → comparaisons AABB
+*   **Framebuffer** : accès direct en RAM (pas de port spécialisé nécessaire)
+
 ***
 
 # **13. Audio — Port‑Mapped I/O**
@@ -702,6 +897,46 @@ Dessine une ligne entre deux points avec l'**algorithme Bresenham**.
 (label no_key)
 ```
 
+## **14.3. Ports clavier polling d'état (optionnel, 0x24–0x27)**
+
+**Profil simplifié pour les jeux temps réel** (ex. : Pong, shoot-em-up).
+
+Modèle **polling non-destructif** : chaque lecture retourne l'état **courant** de la touche (1 = enfoncée, 0 = relâchée).
+
+| Port | Nom            | R/W | Description                           |
+|------|----------------|-----|---------------------------------------|
+| 0x24 | KBD\_KEY\_UP   | R   | 1 si touche UP enfoncée, 0 sinon      |
+| 0x25 | KBD\_KEY\_DOWN | R   | 1 si touche DOWN enfoncée, 0 sinon    |
+| 0x26 | KBD\_KEY\_LEFT | R   | 1 si touche LEFT enfoncée, 0 sinon    |
+| 0x27 | KBD\_KEY\_RIGHT| R   | 1 si touche RIGHT enfoncée, 0 sinon   |
+
+**Mappage clavier recommandé :**
+
+*   UP = Flèche Haut (↑) ou W
+*   DOWN = Flèche Bas (↓) ou S
+*   LEFT = Flèche Gauche (←) ou A
+*   RIGHT = Flèche Droite (→) ou D
+
+**Exemple (déplacer palette) :**
+
+```lisp
+(label update-paddle)
+(in 0x24)                    ; lire UP
+(jump-if-zero check_down)
+  ; ... déplacer palette vers le haut ...
+(label check_down)
+(in 0x25)                    ; lire DOWN
+(jump-if-zero update-done)
+  ; ... déplacer palette vers le bas ...
+(label update-done)
+```
+
+**Notes :**
+
+*   Complément au modèle **KBD_DATA/STATUS** (0x20-0x23) orienté événements.
+*   Permet un gameplay fluide sans file d'attente.
+*   Si implémenté, les ports 0x24-0x27 retournent **0** si la touche est absente (ex. : clavier virtuel sans tous les modifieurs).
+
 ***
 
 # **15. Souris — Port‑Mapped I/O**
@@ -749,6 +984,67 @@ Dessine une ligne entre deux points avec l'**algorithme Bresenham**.
 *   Ports `0x11`–`0x14` (`TIME_MS_B0`–`TIME_MS_B3`) → compteur 32 bits (ms).
 *   **Ordre de lecture** : lire `B3` (0x14) en premier pour verrouiller la valeur, puis `B2` (0x13), `B1` (0x12), `B0` (0x11).
 
+**Synchronisation 60 FPS :**
+
+60 FPS = 1 frame par ~16.67 ms (arrondi à 16–17 ms).
+
+**Pattern recommandé (sans attente active) :**
+
+```lisp
+(label main-loop)
+
+; === LOGIQUE DU JEU ===
+; (déplacer entités, détecter collisions, dessiner)
+
+; === ATTENDRE FRAME ===
+; Boucle d'attente grossière (~16.67 ms)
+; Ajuster la constante selon la vitesse de la VM
+(push 0)
+(label delay-loop)
+(push 1) (add)
+(push 100) (dup) (swap) (lt)  ; 100 itérations = ~16-20 ms (impl-dépendant)
+(jump-if-not-zero delay-loop)
+(drop)
+
+(jump main-loop)
+```
+
+**Pattern recommandé (avec timer) :**
+
+```lisp
+; Lire timestamp initial
+(in 0x14) (drop)     ; latch
+(in 0x13)            ; B2
+(store 0xFFFE)       ; sauvegarder en RAM
+
+(label main-loop)
+
+; === LOGIQUE ===
+; ...
+
+; === ATTENDRE JUSQU'À 16ms ÉCOULÉS ===
+(label wait-frame)
+(in 0x14) (drop)     ; latch courant
+(in 0x13)            ; B2 courant
+(load 0xFFFE)        ; charger B2 précédent
+(sub)                ; diff = courant - ancien
+(push 16) (lt)       ; diff < 16 ?
+(jump-if-not-zero wait-frame)  ; boucler si pas assez de temps
+
+; Sauvegarder nouveau timestamp
+(in 0x14) (drop)
+(in 0x13)
+(store 0xFFFE)
+
+(jump main-loop)
+```
+
+**Notes :**
+
+*   La **granularité en ms** rend 16.67 ms impossible à atteindre exactement (arrondir à 16 ou 17).
+*   Lecture incomplète du timer : si seul `B1` ou `B2` est nécessaire, lire `B3` en premier (latch) reste obligatoire.
+*   **Overflow** : 32-bit ms = ≈49 jours. Pas d'enjeu pour la plupart des jeux.
+
 ***
 
 # **17. Découverte des capacités (mise à jour)**
@@ -759,10 +1055,15 @@ Dessine une ligne entre deux points avec l'**algorithme Bresenham**.
 *   bit1 : **Console flush** supporté (`0x03`)
 *   bit2 : **RNG8** présent (`0x10`)
 *   bit3 : **TIME** présent (`0x11–0x14`)
-*   bit4 : **Clavier** présent (`0x20/0x21`)
-*   bit5 : **Vidéo** présente (`0x30–0x3D`)
+*   bit4 : **Clavier (événements)** présent (`0x20/0x21`)
+*   bit5 : **Vidéo** présente (`0x30–0x3D` + optionnel `0x3E–0x3F` primitives graphiques)
 *   bit6 : **Audio** présent (`0x50–0x59`)
 *   bit7 : **Souris** présente (`0x70–0x77`)
+
+**Extensions optionnelles (pas de bit dédié) :**
+
+*   **Clavier polling d'état** (`0x24–0x27`) : indépendant ; si bit4 = 1, le clavier est présent (soit mode événements, soit polling, soit les deux)
+*   **Primitives graphiques** (`0x3E–0x3F`) : implicite si bit5 (vidéo) = 1 sur les hôtes supportant FB8/FB16 avec dessin hardware
 
 **Exemple : tester vidéo**
 
@@ -796,6 +1097,52 @@ Dessine une ligne entre deux points avec l'**algorithme Bresenham**.
 ## **18.4. SPL‑Input‑KB+Mouse (optionnel standard)**
 
 *   Clavier (0x20/0x21), Souris (0x70–0x77).
+
+## **18.5. SPL‑Pong‑Minimal (profil de jeu 2D simple)**
+
+**Cas d'usage :** jeux arcade minimalistes (Pong, Breakout, shoot-em-up simple).
+
+**Composants requis :**
+
+*   **Console** : `0x01` (sortie debug/log)
+*   **Vidéo** : FB8, **160×120**, `0x30–0x3A`, optionnel primitives `0x3E–0x3F`
+*   **Clavier** : polling d'état `0x24–0x27` (UP/DOWN/LEFT/RIGHT)
+*   **Timer** : `0x11–0x14` (synchronisation 60 FPS)
+*   **RNG** : `0x10` (optionnel, pour IA/variations)
+
+**Exemple d'initialisation minimale :**
+
+```lisp
+; Init vidéo 160×120
+(push 1)      (out 0x30)   ; VID_MODE = FB8
+(push 160)    (out 0x31)   ; W_LO
+(push 0)      (out 0x32)   ; W_HI
+(push 120)    (out 0x33)   ; H_LO
+(push 0)      (out 0x34)   ; H_HI
+(push 160)    (out 0x35)   ; STRIDE_LO
+(push 0)      (out 0x36)   ; STRIDE_HI
+(push 0)      (out 0x37)   ; FB_LO = 0x8000
+(push 128)    (out 0x38)   ; FB_HI
+
+; Effacer l'écran
+(push 0)      (out 0x3B)   ; CLEAR_COLOR = 0
+(push 1)      (out 0x3D)   ; CLEAR
+(push 1)      (out 0x3A)   ; FLIP
+
+; Prêt à dessiner
+```
+
+**Mémoire recommandée :**
+
+*   `0x0000–0x007F` : zone de travail (variables locales)
+*   `0x0080–0x7FFF` : code + données
+*   `0x8000–0xFFFF` : framebuffer 160×120 (19200 octets utilisés)
+
+**Performances attendues :**
+
+*   ~60 FPS sur une VM moderne
+*   Temps logique : < 15 ms par frame
+*   Dessin : via `store` direct (pas de primitives hardware) ou via `0x3E` si disponible
 
 ***
 

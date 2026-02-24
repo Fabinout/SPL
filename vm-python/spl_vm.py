@@ -18,6 +18,7 @@ import time
 import random
 import math
 import threading
+import signal
 
 try:
     import sounddevice as sd
@@ -244,6 +245,12 @@ class VideoSubsystem:
         self.kbd_lock = threading.Lock()
         # Text widget for console output (created on demand)
         self._text_widget = None
+        # Callback when window closes
+        self._on_close_callback = None
+
+    def set_on_close_callback(self, callback):
+        """Set a callback to be called when the window closes."""
+        self._on_close_callback = callback
 
     def set_port(self, port, val):
         if port == 0x30:
@@ -594,8 +601,14 @@ class VideoSubsystem:
     def _on_close(self):
         self._closed = True
         if self._root:
-            self._root.destroy()
+            try:
+                self._root.destroy()
+            except Exception:
+                pass
             self._root = None
+        # Call the close callback if set
+        if self._on_close_callback:
+            self._on_close_callback()
 
     def get_keyboard_port(self, port):
         """Get keyboard polling state (0x24-0x27)."""
@@ -766,6 +779,9 @@ class SPLVM:
         self.frame_target_ms = 1000.0 / 60.0  # ~16.67 ms
         self.last_frame_time = time.monotonic()
 
+        # Set up close callback
+        self.video.set_on_close_callback(self._on_window_close)
+
     # --- Stack operations ---
 
     def push(self, val):
@@ -812,6 +828,11 @@ class SPLVM:
         print(f"\nVM FAULT at PC=0x{self.pc:04X}: {msg}", file=sys.stderr)
         self.running = False
         sys.exit(1)
+
+    def _on_window_close(self):
+        """Called when the GUI window is closed."""
+        self.flush_console()
+        self.running = False
 
     # --- I/O ---
 
@@ -1084,6 +1105,14 @@ def main():
         sys.exit(1)
 
     vm = SPLVM(code)
+
+    # Set up signal handler for Ctrl+C
+    def signal_handler(signum, frame):
+        vm._on_window_close()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
     vm.run()
     vm.video.keep_open()
 

@@ -93,7 +93,7 @@
 (dup)
 (push 64)
 (sub)
-(jump-if-not-zero write-fname-done)
+(jump-if-zero write-fname-done)
 
 (over)
 (push 0x03)
@@ -541,23 +541,24 @@
 ; Loads cards from file
 ; ============================================================================
 (label load-file)
+; Set FILE_MODE = READ (0)
+(push 0)
+(out 0xA1)
+
+; Write filename to port (null terminator triggers open)
 (call write-filename-to-port)
 
-(push 0)
-(out 0xA1)          ; FILE_MODE = READ
-
-(push 1)
-(out 0xA0)          ; FILE_CMD = OPEN
-
+; Check for errors
 (in 0xA3)
 (push 2)
 (and)
 (jump-if-not-zero load-file-error)
 
-; Read card count
+; Read card count byte
 (in 0xA2)
 (store 0x0100)
 
+; Close file
 (push 2)
 (out 0xA0)          ; FILE_CMD = CLOSE
 
@@ -565,7 +566,7 @@
 
 (label load-file-error)
 (push 0)
-(store 0x0100)      ; Set CARD_COUNT = 0
+(store 0x0100)      ; Set CARD_COUNT = 0 on error
 (return)
 
 ; ============================================================================
@@ -573,14 +574,14 @@
 ; Saves cards to file
 ; ============================================================================
 (label save-file)
+; Set FILE_MODE = WRITE (1)
+(push 1)
+(out 0xA1)
+
+; Write filename to port (null terminator triggers open)
 (call write-filename-to-port)
 
-(push 1)
-(out 0xA1)          ; FILE_MODE = WRITE
-
-(push 1)
-(out 0xA0)          ; FILE_CMD = OPEN
-
+; Check for errors
 (in 0xA3)
 (push 2)
 (and)
@@ -590,13 +591,16 @@
 (load 0x0100)
 (out 0xA2)
 
+; Close file
 (push 2)
 (out 0xA0)          ; FILE_CMD = CLOSE
 
+; Print success message
 (push 10)(out 0x01)
 (push 83)(out 0x01) ; S
 (push 97)(out 0x01) ; a
-(push 118)(out 0x01); e
+(push 118)(out 0x01); v
+(push 101)(out 0x01); e
 (push 100)(out 0x01); d
 (push 33)(out 0x01) ; !
 (push 10)(out 0x01)
@@ -630,10 +634,46 @@
 (push 109)(out 0x01)(push 101)(out 0x01)(push 58)(out 0x01)
 (push 32)(out 0x01)
 
-; Read filename (simplified - just read one char for demo)
-(call wait-key)
-(out 0x01)
-(push 10)(out 0x01)
+; Read filename into INPUT_BUF
+(call read-line)
+
+; Copy filename from INPUT_BUF (0x0200) to FNAME_BUF (0x0300)
+(push 0)                 ; index = 0
+(label copy-fname-loop)
+(dup)
+(load 0x0101)            ; Check if index >= INPUT_POS
+(sub)
+(jump-if-zero copy-fname-done)
+
+; Load byte from INPUT_BUF[index]
+(push 0x02)              ; HI for INPUT_BUF
+(over)                   ; Duplicate index for LO
+(push 0x00)
+(add)                    ; LO = 0x00 + index
+(load-indirect)          ; [index, byte]
+
+; Store byte to FNAME_BUF[index]
+(push 0x03)              ; HI for FNAME_BUF
+(over)                   ; Duplicate index
+(push 0x00)
+(add)                    ; LO = 0x00 + index
+(store-indirect)         ; Store to FNAME_BUF[index]
+
+; Increment index
+(push 1)
+(add)
+(jump copy-fname-loop)
+
+(label copy-fname-done)
+(drop)
+
+; Null-terminate FNAME_BUF
+(push 0)
+(push 0x03)
+(load 0x0101)            ; Use INPUT_POS as null position
+(push 0x00)
+(add)
+(store-indirect)
 
 ; Try to load file
 (call load-file)

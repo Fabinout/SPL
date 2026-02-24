@@ -61,9 +61,14 @@ VM_ERROR_TESTS = [
 
 
 def run(cmd):
+    # Disable GUI for tests to avoid creating dozens of windows
+    env = os.environ.copy()
+    env['SPL_NO_GUI'] = '1'
+
     result = subprocess.run(
         [sys.executable] + cmd,
         capture_output=True,
+        env=env,
     )
     return result.returncode, result.stdout, result.stderr.decode("utf-8", errors="replace")
 

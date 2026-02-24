@@ -611,8 +611,10 @@ class VideoSubsystem:
 
     def get_keyboard_input(self, port):
         """Get keyboard event-based input (0x20-0x21)."""
-        # Ensure tkinter window exists for keyboard capture
-        self._ensure_keyboard_window()
+        # Ensure tkinter window exists for keyboard capture (unless GUI disabled)
+        gui_disabled = os.environ.get('SPL_NO_GUI', '0') == '1'
+        if not gui_disabled:
+            self._ensure_keyboard_window()
 
         if port == 0x20:  # KBD_DATA - read one byte from queue
             with self.kbd_lock:
@@ -887,11 +889,17 @@ class SPLVM:
             # Convert to string for display
             text = bytes(self.console_buf).decode('utf-8', errors='replace')
 
-            # Write to GUI window if available
-            if self.video and self.video._text_widget:
+            # Check if GUI is disabled (for testing)
+            gui_disabled = os.environ.get('SPL_NO_GUI', '0') == '1'
+
+            # Write to GUI window if available and not disabled
+            if self.video and not gui_disabled:
+                # Ensure window exists on first output
+                if not self.video._text_widget:
+                    self.video._ensure_keyboard_window()
                 self.video.write_to_console_window(text)
             else:
-                # Fall back to stdout if no GUI window
+                # Fall back to stdout if no video system or GUI disabled
                 sys.stdout.buffer.write(bytes(self.console_buf))
                 sys.stdout.buffer.flush()
 

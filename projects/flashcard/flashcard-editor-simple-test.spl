@@ -1,0 +1,109 @@
+; Test simple du flashcard editor - just write/read avec indirect
+
+(jump test-start)
+
+(label card-address)
+(dup)
+(push 2)
+(div)
+(push 4)
+(add)
+(swap)
+(push 2)
+(mod)
+(push 128)
+(mul)
+(return)
+
+(label test-start)
+
+(push 10)(out 0x01)
+(push 84)(out 0x01) ; T
+(push 101)(out 0x01); e
+(push 115)(out 0x01); s
+(push 116)(out 0x01); t
+(push 10)(out 0x01)
+
+; Write "Hello" to card 0 using indirect
+(push 0)
+(call card-address)
+(push 72)
+(store-indirect)        ; H
+
+(push 0)
+(call card-address)
+(push 1)
+(add)
+(push 101)
+(store-indirect)        ; e
+
+(push 0)
+(call card-address)
+(push 2)
+(add)
+(push 108)
+(store-indirect)        ; l
+
+(push 0)
+(call card-address)
+(push 3)
+(add)
+(push 108)
+(store-indirect)        ; l
+
+(push 0)
+(call card-address)
+(push 4)
+(add)
+(push 111)
+(store-indirect)        ; o
+
+; Read back
+(push 82)(out 0x01)   ; R
+(push 58)(out 0x01)   ; :
+(push 32)(out 0x01)
+
+(push 0)
+(call card-address)
+(load-indirect)
+(out 0x01)            ; H
+
+(push 0)
+(call card-address)
+(push 1)
+(add)
+(load-indirect)
+(out 0x01)            ; e
+
+(push 0)
+(call card-address)
+(push 2)
+(add)
+(load-indirect)
+(out 0x01)            ; l
+
+(push 0)
+(call card-address)
+(push 3)
+(add)
+(load-indirect)
+(out 0x01)            ; l
+
+(push 0)
+(call card-address)
+(push 4)
+(add)
+(load-indirect)
+(out 0x01)            ; o
+
+(push 10)(out 0x01)
+(push 10)(out 0x01)
+(push 80)(out 0x01)   ; P
+(push 97)(out 0x01)   ; a
+(push 115)(out 0x01)  ; s
+(push 115)(out 0x01)  ; s
+(push 101)(out 0x01)  ; e
+(push 100)(out 0x01)  ; d
+(push 10)(out 0x01)
+
+(halt)

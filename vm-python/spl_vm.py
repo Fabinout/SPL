@@ -242,6 +242,8 @@ class VideoSubsystem:
         # Keyboard event queue (for KBD_DATA/KBD_STATUS ports)
         self.kbd_queue = []
         self.kbd_lock = threading.Lock()
+        # Text widget for console output (created on demand)
+        self._text_widget = None
 
     def set_port(self, port, val):
         if port == 0x30:
@@ -623,25 +625,49 @@ class VideoSubsystem:
         return 0
 
     def _ensure_keyboard_window(self):
-        """Create a minimal tkinter window for keyboard input if not already exists."""
+        """Create a tkinter window with console output display."""
         if self._root is not None:
             return  # Window already exists
 
         import tkinter as tk
 
         self._root = tk.Tk()
-        self._root.title("SPL Keyboard Input")
-        self._root.geometry("400x100")
-        self._root.resizable(False, False)
+        self._root.title("SPL Application")
+        self._root.geometry("600x500")
+        self._root.resizable(True, True)
 
-        # Add a label to guide the user
-        label = tk.Label(
-            self._root,
-            text="SPL Keyboard Input Active\nPress any key to interact with the program",
-            font=("Arial", 12),
-            pady=20
+        # Create a frame for the text display
+        frame = tk.Frame(self._root)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Add a scrollbar
+        scrollbar = tk.Scrollbar(frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Create the text widget for console output
+        self._text_widget = tk.Text(
+            frame,
+            font=("Courier", 12),
+            bg="#f0f0f0",
+            fg="#000000",
+            yscrollcommand=scrollbar.set,
+            wrap=tk.WORD,
+            state=tk.DISABLED  # Read-only initially
         )
-        label.pack()
+        self._text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self._text_widget.yview)
+
+        # Add instruction label at the bottom
+        instr_frame = tk.Frame(self._root)
+        instr_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        instr_label = tk.Label(
+            instr_frame,
+            text="Press any key to continue...",
+            font=("Arial", 10),
+            fg="#666666"
+        )
+        instr_label.pack()
 
         # Bind keyboard events
         self._root.bind("<Key>", self._on_key_press)
@@ -668,6 +694,20 @@ class VideoSubsystem:
         """Clear the keyboard queue."""
         with self.kbd_lock:
             self.kbd_queue.clear()
+
+    def write_to_console_window(self, text):
+        """Write text to the console window if it exists."""
+        if self._text_widget is None:
+            return
+
+        try:
+            import tkinter as tk
+            self._text_widget.config(state=tk.NORMAL)
+            self._text_widget.insert(tk.END, text)
+            self._text_widget.see(tk.END)  # Scroll to bottom
+            self._text_widget.config(state=tk.DISABLED)
+        except Exception:
+            pass  # Window was closed
 
     def get_mouse_port(self, port):
         if port == 0x70: return self.mouse_x & 0xFF
@@ -844,8 +884,17 @@ class SPLVM:
 
     def flush_console(self):
         if self.console_buf:
-            sys.stdout.buffer.write(bytes(self.console_buf))
-            sys.stdout.buffer.flush()
+            # Convert to string for display
+            text = bytes(self.console_buf).decode('utf-8', errors='replace')
+
+            # Write to GUI window if available
+            if self.video and self.video._text_widget:
+                self.video.write_to_console_window(text)
+            else:
+                # Fall back to stdout if no GUI window
+                sys.stdout.buffer.write(bytes(self.console_buf))
+                sys.stdout.buffer.flush()
+
             self.console_buf.clear()
 
     def _process_events(self):

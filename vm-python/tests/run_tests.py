@@ -345,6 +345,23 @@ def main():
             failed += 1
         total += 1
 
+    # Test print-cstring
+    print_cstring_test = os.path.join(ROOT, "tests", "test_print_cstring.spl")
+    if os.path.exists(print_cstring_test):
+        ok, actual, err = asm_and_run(print_cstring_test)
+        if ok and "Hello\nWorld\n" in actual:
+            print("  PASS  test_print_cstring.spl (string output)")
+            passed += 1
+        else:
+            print(f"  FAIL  test_print_cstring.spl")
+            if err:
+                print(f"        error: {err}")
+            else:
+                print(f"        expected: 'Hello\\nWorld\\n'")
+                print(f"        actual:   {actual!r}")
+            failed += 1
+        total += 1
+
     # --- Python test modules (Priority 1 & 2) ---
     import unittest
 

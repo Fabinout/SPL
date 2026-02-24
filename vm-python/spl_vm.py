@@ -51,6 +51,7 @@ OP_LOAD             = 0x20
 OP_STORE            = 0x21
 OP_LOAD_INDIRECT    = 0x22
 OP_STORE_INDIRECT   = 0x23
+OP_PRINT_CSTRING    = 0x42
 OP_JUMP             = 0x30
 OP_JUMP_IF_ZERO     = 0x31
 OP_JUMP_IF_NOT_ZERO = 0x32
@@ -864,6 +865,17 @@ class SPLVM:
                 self.push(self.port_in(self.read_byte()))
             elif opcode == OP_OUT:
                 port = self.read_byte(); self.port_out(port, self.pop())
+            elif opcode == OP_PRINT_CSTRING:
+                addr = self.read_addr()
+                if addr >= self.MEMORY_SIZE:
+                    self.fault(f"print-cstring: address 0x{addr:04X} out of bounds")
+                # Read bytes from memory until null terminator, print each
+                while addr < self.MEMORY_SIZE:
+                    byte = self.memory[addr]
+                    if byte == 0:
+                        break
+                    self.console_buf.append(byte)
+                    addr += 1
 
             else:
                 self.fault(f"unknown opcode 0x{opcode:02X}")

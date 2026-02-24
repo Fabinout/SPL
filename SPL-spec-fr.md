@@ -212,6 +212,24 @@ Les adresses sont des **constantes 16 bits** (nombres uniquement, pas de labels)
 (out port8)   ; pop 8 bits vers le périphérique
 ```
 
+## **6.5.1. String Output**
+
+```lisp
+(print-cstring adresse16)   ; affiche une chaîne null-terminée depuis la RAM
+```
+
+*   Lit des octets depuis la mémoire RAM à partir de `adresse16` jusqu'à rencontrer un octet nul (`0x00`).
+*   Chaque octet non-nul est écrit à la **console** (port `0x01`) automatiquement.
+*   L'octet nul (`0x00`) n'est **pas** affiché, c'est le marqueur de fin.
+*   L'instruction n'empile ni ne dépile rien sur la pile de travail.
+*   Erreur si l'adresse est hors limites de la mémoire (≥ 0x10000).
+
+**Exemple** :
+```lisp
+; Supposons "Hello\0" stocké en RAM à 0x0400
+(print-cstring 0x0400)   ; affiche "Hello"
+```
+
 ## **6.6. Données embarquées**
 
 ```lisp
@@ -338,6 +356,7 @@ Chaque instruction s’encode :
 | gt               | 0x1A   | 0           |
 | load             | 0x20   | 2 bytes     |
 | store            | 0x21   | 2 bytes     |
+| print-cstring    | 0x42   | 2 bytes     |
 | jump             | 0x30   | 2 bytes     |
 | jump-if-zero     | 0x31   | 2 bytes     |
 | jump-if-not-zero | 0x32   | 2 bytes     |

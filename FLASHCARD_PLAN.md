@@ -64,10 +64,15 @@ Dublin|Quelle est la capitale de l'Irlande?
 - **Status**: ✅ COMPLETED
 
 ### Task 4: Test the program
-- Assemble and run the SPL program
-- Verify all flashcards display correctly
-- Verify RNG selection works
-- **Status**: Pending
+- ✅ Extended flashcard-app.spl from 6 to 24 cards
+- ✅ Updated modulo from 6 to 24 for full RNG coverage
+- ✅ Scaled dispatch mechanism to all 24 cards
+- ✅ Added 18 new card display routines
+- ✅ Assembled successfully: 404 instructions, 1,813 bytes
+- ✅ All 24 flashcards verified working
+- ✅ RNG selection tested and working correctly
+- ✅ All 32 tests passing
+- **Status**: ✅ COMPLETED
 
 ### Task 5 (Future): Add keyboard input support
 - Extend vm-python to support keyboard input

@@ -1,20 +1,18 @@
-; Task 3: Flashcard App - Main Program Loop
+; Task 3: Flashcard App - Main Program Loop (Full 24 Cards)
 ;
-; This is the core flashcard application that:
-; 1. Selects a random flashcard (0-23)
+; This is the complete flashcard application that:
+; 1. Selects a random flashcard (0-23) from all 24 European capitals
 ; 2. Displays the question
 ; 3. Waits for the user to read
 ; 4. Displays the answer
 ; 5. Repeats with a new random card
 ;
-; Note: For simplicity, this version demonstrates the loop with
-; representative flashcards. A full version with all 24 cards would
-; follow the same pattern, scaled up.
+; All 24 flashcards are included and fully functional.
 
 (jump program-start)
 
 ; ============================================================================
-; FLASHCARD DATABASE - Representative Sample (full would have all 24)
+; FLASHCARD DATABASE - All 24 European Capitals
 ; ============================================================================
 
 ; Card 1: France
@@ -41,6 +39,78 @@
 (data ans-6 "Vienne" 0)
 (data que-6 "Quelle est la capitale de l'Autriche?" 0)
 
+; Card 7: Poland
+(data ans-7 "Varsovie" 0)
+(data que-7 "Quelle est la capitale de la Pologne?" 0)
+
+; Card 8: Czech Republic
+(data ans-8 "Prague" 0)
+(data que-8 "Quelle est la capitale de la Republique tcheque?" 0)
+
+; Card 9: Greece
+(data ans-9 "Athenes" 0)
+(data que-9 "Quelle est la capitale de la Grece?" 0)
+
+; Card 10: Portugal
+(data ans-10 "Lisbonne" 0)
+(data que-10 "Quelle est la capitale du Portugal?" 0)
+
+; Card 11: Sweden
+(data ans-11 "Stockholm" 0)
+(data que-11 "Quelle est la capitale de la Suede?" 0)
+
+; Card 12: Denmark
+(data ans-12 "Copenhague" 0)
+(data que-12 "Quelle est la capitale du Danemark?" 0)
+
+; Card 13: Belgium
+(data ans-13 "Bruxelles" 0)
+(data que-13 "Quelle est la capitale de la Belgique?" 0)
+
+; Card 14: Switzerland
+(data ans-14 "Berne" 0)
+(data que-14 "Quelle est la capitale de la Suisse?" 0)
+
+; Card 15: Romania
+(data ans-15 "Bucarest" 0)
+(data que-15 "Quelle est la capitale de la Roumanie?" 0)
+
+; Card 16: Hungary
+(data ans-16 "Budapest" 0)
+(data que-16 "Quelle est la capitale de la Hongrie?" 0)
+
+; Card 17: Slovakia
+(data ans-17 "Bratislava" 0)
+(data que-17 "Quelle est la capitale de la Slovaquie?" 0)
+
+; Card 18: Slovenia
+(data ans-18 "Ljubljana" 0)
+(data que-18 "Quelle est la capitale de la Slovenie?" 0)
+
+; Card 19: Croatia
+(data ans-19 "Zagreb" 0)
+(data que-19 "Quelle est la capitale de la Croatie?" 0)
+
+; Card 20: Serbia
+(data ans-20 "Belgrade" 0)
+(data que-20 "Quelle est la capitale de la Serbie?" 0)
+
+; Card 21: Bulgaria
+(data ans-21 "Sofia" 0)
+(data que-21 "Quelle est la capitale de la Bulgarie?" 0)
+
+; Card 22: Finland
+(data ans-22 "Helsinki" 0)
+(data que-22 "Quelle est la capitale de la Finlande?" 0)
+
+; Card 23: Iceland
+(data ans-23 "Reykjavik" 0)
+(data que-23 "Quelle est la capitale de l'Islande?" 0)
+
+; Card 24: Ireland
+(data ans-24 "Dublin" 0)
+(data que-24 "Quelle est la capitale de l'Irlande?" 0)
+
 ; ============================================================================
 ; END OF FLASHCARD DATABASE
 ; ============================================================================
@@ -65,13 +135,13 @@
 
 ; Get random card selection
 (in 0x10)               ; Read RNG (0-255)
-(push 6)                ; Mod 6 (for 6 cards in this demo)
-(mod)                   ; Result: 0-5
+(push 24)               ; Mod 24 (for all 24 cards)
+(mod)                   ; Result: 0-23
 (dup)                   ; Keep copy for comparison
 (store 0x0100)          ; Store card index in memory (0x0100)
 
 ; ============================================================================
-; DISPATCH: Jump to correct card based on index
+; DISPATCH: Jump to correct card based on index (0-23)
 ; ============================================================================
 
 (dup)
@@ -99,12 +169,103 @@
 (sub)
 (jump-if-zero card-5)
 
+(dup)
+(push 6)
+(sub)
+(jump-if-zero card-6)
+
+(dup)
+(push 7)
+(sub)
+(jump-if-zero card-7)
+
+(dup)
+(push 8)
+(sub)
+(jump-if-zero card-8)
+
+(dup)
+(push 9)
+(sub)
+(jump-if-zero card-9)
+
+(dup)
+(push 10)
+(sub)
+(jump-if-zero card-10)
+
+(dup)
+(push 11)
+(sub)
+(jump-if-zero card-11)
+
+(dup)
+(push 12)
+(sub)
+(jump-if-zero card-12)
+
+(dup)
+(push 13)
+(sub)
+(jump-if-zero card-13)
+
+(dup)
+(push 14)
+(sub)
+(jump-if-zero card-14)
+
+(dup)
+(push 15)
+(sub)
+(jump-if-zero card-15)
+
+(dup)
+(push 16)
+(sub)
+(jump-if-zero card-16)
+
+(dup)
+(push 17)
+(sub)
+(jump-if-zero card-17)
+
+(dup)
+(push 18)
+(sub)
+(jump-if-zero card-18)
+
+(dup)
+(push 19)
+(sub)
+(jump-if-zero card-19)
+
+(dup)
+(push 20)
+(sub)
+(jump-if-zero card-20)
+
+(dup)
+(push 21)
+(sub)
+(jump-if-zero card-21)
+
+(dup)
+(push 22)
+(sub)
+(jump-if-zero card-22)
+
+(dup)
+(push 23)
+(sub)
+(jump-if-zero card-23)
+
 ; Default: card 0
 (jump card-0)
 
 ; ============================================================================
-; CARD DISPLAY ROUTINES
+; CARD DISPLAY ROUTINES (All 24 Cards)
 ; ============================================================================
+; Each routine displays the question, waits, displays answer, then loops
 
 (label card-0)
 (drop)
@@ -160,6 +321,168 @@
 (push 10) (out 0x01)
 (jump main-loop)
 
+(label card-6)
+(drop)
+(print-rom-string que-7)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-7)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-7)
+(drop)
+(print-rom-string que-8)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-8)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-8)
+(drop)
+(print-rom-string que-9)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-9)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-9)
+(drop)
+(print-rom-string que-10)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-10)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-10)
+(drop)
+(print-rom-string que-11)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-11)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-11)
+(drop)
+(print-rom-string que-12)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-12)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-12)
+(drop)
+(print-rom-string que-13)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-13)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-13)
+(drop)
+(print-rom-string que-14)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-14)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-14)
+(drop)
+(print-rom-string que-15)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-15)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-15)
+(drop)
+(print-rom-string que-16)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-16)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-16)
+(drop)
+(print-rom-string que-17)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-17)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-17)
+(drop)
+(print-rom-string que-18)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-18)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-18)
+(drop)
+(print-rom-string que-19)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-19)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-19)
+(drop)
+(print-rom-string que-20)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-20)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-20)
+(drop)
+(print-rom-string que-21)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-21)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-21)
+(drop)
+(print-rom-string que-22)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-22)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-22)
+(drop)
+(print-rom-string que-23)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-23)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-23)
+(drop)
+(print-rom-string que-24)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-24)
+(push 10) (out 0x01)
+(jump main-loop)
+
 ; ============================================================================
 ; DELAY ROUTINE - Wait for user to read the question
 ; ============================================================================
@@ -185,6 +508,7 @@
 ; ============================================================================
 ; END OF PROGRAM
 ; Note: This is a continuous loop - it will run forever.
+; All 24 European capital flashcards are now fully integrated.
 ; In a real app, you could add a quit condition (e.g., timer, keyboard)
 ; ============================================================================
 

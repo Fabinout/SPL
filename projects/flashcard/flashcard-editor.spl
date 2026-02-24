@@ -158,33 +158,27 @@
 
 (label read-line-loop)
 (load 0x0101)
-(push 127)
+(push 128)
 (sub)
-(jump-if-not-zero read-line-done)
+(jump-if-zero read-line-done)  ; If INPUT_POS >= 128, exit
 
 (call wait-key)
 (dup)
-(push 0x0D)             ; Enter?
+(push 0x0D)             ; Enter key?
 (sub)
-(jump-if-zero read-line-done)
+(jump-if-zero read-line-done)  ; If Enter, exit
 
-; Echo and store
+; Echo character
 (dup)
 (out 0x01)
 
-(store 0x0102)          ; Temp storage for char
-
-; Write to INPUT_BUF[index]
-(load 0x0101)
-(store 0x0101)          ; index stays same
-(load 0x0102)
-(store 0x0102)          ; value stays same
-(push 0x02)             ; HI
-(load 0x0101)
-(push 0x00)             ; LO
-(add)
-(load 0x0102)
-(store-indirect)        ; Write to buffer[index]
+; Store character to INPUT_BUF[INPUT_POS]
+; Stack: [char]
+(push 0x02)             ; [char, HI]
+(load 0x0101)           ; [char, HI, INPUT_POS]
+(push 0x00)
+(add)                   ; [char, HI, INPUT_POS+0]
+(store-indirect)        ; Write char to buffer[INPUT_POS]
 
 ; Increment index
 (load 0x0101)
@@ -195,17 +189,15 @@
 (jump read-line-loop)
 
 (label read-line-done)
-; Add null terminator
-(load 0x0101)
-(store 0x0102)
-(push 0x02)
-(load 0x0101)
+; Add null terminator at INPUT_BUF[INPUT_POS]
+(push 0)                ; VALUE = 0 (null)
+(push 0x02)             ; HI
+(load 0x0101)           ; INPUT_POS
 (push 0x00)
-(add)
-(push 0)
-(store-indirect)
+(add)                   ; LO = INPUT_POS
+(store-indirect)        ; Store null terminator
 
-(push 10)(out 0x01)
+(push 10)(out 0x01)     ; Newline
 (return)
 
 ; ============================================================================

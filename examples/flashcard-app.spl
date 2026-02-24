@@ -1,0 +1,191 @@
+; Task 3: Flashcard App - Main Program Loop
+;
+; This is the core flashcard application that:
+; 1. Selects a random flashcard (0-23)
+; 2. Displays the question
+; 3. Waits for the user to read
+; 4. Displays the answer
+; 5. Repeats with a new random card
+;
+; Note: For simplicity, this version demonstrates the loop with
+; representative flashcards. A full version with all 24 cards would
+; follow the same pattern, scaled up.
+
+(jump program-start)
+
+; ============================================================================
+; FLASHCARD DATABASE - Representative Sample (full would have all 24)
+; ============================================================================
+
+; Card 1: France
+(data ans-1 "Paris" 0)
+(data que-1 "Quelle est la capitale de la France?" 0)
+
+; Card 2: Germany
+(data ans-2 "Berlin" 0)
+(data que-2 "Quelle est la capitale de l'Allemagne?" 0)
+
+; Card 3: Spain
+(data ans-3 "Madrid" 0)
+(data que-3 "Quelle est la capitale de l'Espagne?" 0)
+
+; Card 4: Italy
+(data ans-4 "Rome" 0)
+(data que-4 "Quelle est la capitale de l'Italie?" 0)
+
+; Card 5: Netherlands
+(data ans-5 "Amsterdam" 0)
+(data que-5 "Quelle est la capitale des Pays-Bas?" 0)
+
+; Card 6: Austria
+(data ans-6 "Vienne" 0)
+(data que-6 "Quelle est la capitale de l'Autriche?" 0)
+
+; ============================================================================
+; END OF FLASHCARD DATABASE
+; ============================================================================
+
+(label program-start)
+
+; ============================================================================
+; MAIN PROGRAM LOOP
+; ============================================================================
+;
+; Flow:
+; 1. Get random number (0-255)
+; 2. Mod 6 to select from 6 cards
+; 3. Dispatch to correct card display
+; 4. Display question
+; 5. Wait (delay)
+; 6. Display answer
+; 7. Repeat
+;
+
+(label main-loop)
+
+; Get random card selection
+(in 0x10)               ; Read RNG (0-255)
+(push 6)                ; Mod 6 (for 6 cards in this demo)
+(mod)                   ; Result: 0-5
+(dup)                   ; Keep copy for comparison
+(store 0x0100)          ; Store card index in memory (0x0100)
+
+; ============================================================================
+; DISPATCH: Jump to correct card based on index
+; ============================================================================
+
+(dup)
+(push 1)
+(sub)
+(jump-if-zero card-1)
+
+(dup)
+(push 2)
+(sub)
+(jump-if-zero card-2)
+
+(dup)
+(push 3)
+(sub)
+(jump-if-zero card-3)
+
+(dup)
+(push 4)
+(sub)
+(jump-if-zero card-4)
+
+(dup)
+(push 5)
+(sub)
+(jump-if-zero card-5)
+
+; Default: card 0
+(jump card-0)
+
+; ============================================================================
+; CARD DISPLAY ROUTINES
+; ============================================================================
+
+(label card-0)
+(drop)
+(print-rom-string que-1)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-1)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-1)
+(drop)
+(print-rom-string que-2)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-2)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-2)
+(drop)
+(print-rom-string que-3)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-3)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-3)
+(drop)
+(print-rom-string que-4)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-4)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-4)
+(drop)
+(print-rom-string que-5)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-5)
+(push 10) (out 0x01)
+(jump main-loop)
+
+(label card-5)
+(drop)
+(print-rom-string que-6)
+(push 10) (out 0x01)
+(call wait-delay)
+(print-rom-string ans-6)
+(push 10) (out 0x01)
+(jump main-loop)
+
+; ============================================================================
+; DELAY ROUTINE - Wait for user to read the question
+; ============================================================================
+; Simple busy-wait delay: approximately 1-2 seconds
+; More sophisticated version could use timer port (0x11-0x14)
+
+(label wait-delay)
+(push 0)                ; Initialize counter to 0
+
+(label delay-loop)
+(push 1)
+(add)                   ; Increment counter
+(push 200)              ; Check if we've counted to 200
+(dup)
+(swap)
+(lt)                    ; Compare: counter < 200 ?
+(jump-if-not-zero delay-loop)  ; If true, loop
+
+(drop)                  ; Clean up counter
+(push 10) (out 0x01)    ; Print newline between Q and A
+(return)
+
+; ============================================================================
+; END OF PROGRAM
+; Note: This is a continuous loop - it will run forever.
+; In a real app, you could add a quit condition (e.g., timer, keyboard)
+; ============================================================================
+
+(halt)

@@ -396,6 +396,23 @@ def main():
             failed += 1
         total += 1
 
+    # Test flashcard app main loop
+    app_test = os.path.join(ROOT, "tests", "test_flashcard_app.spl")
+    if os.path.exists(app_test):
+        ok, actual, err = asm_and_run(app_test)
+        if ok and "Paris\n" in actual and "Berlin\n" in actual and "Madrid\n" in actual and "Quelle" in actual:
+            print("  PASS  test_flashcard_app.spl (main program loop)")
+            passed += 1
+        else:
+            print(f"  FAIL  test_flashcard_app.spl")
+            if err:
+                print(f"        error: {err}")
+            else:
+                print(f"        expected: flashcard questions and answers")
+                print(f"        actual:   {actual!r}")
+            failed += 1
+        total += 1
+
     # --- Python test modules (Priority 1 & 2) ---
     import unittest
 

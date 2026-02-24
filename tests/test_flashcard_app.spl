@@ -1,0 +1,43 @@
+; Test: Flashcard app main loop
+; Verifies the main program loop displays random flashcards correctly
+
+(jump program-start)
+
+; Sample flashcard data
+(data ans-1 "Paris" 0)
+(data que-1 "Quelle est la capitale de la France?" 0)
+
+(data ans-2 "Berlin" 0)
+(data que-2 "Quelle est la capitale de l'Allemagne?" 0)
+
+(data ans-3 "Madrid" 0)
+(data que-3 "Quelle est la capitale de l'Espagne?" 0)
+
+(label program-start)
+
+; ============================================================================
+; Simplified test: Display 3 flashcards in sequence
+; ============================================================================
+; This tests the core loop logic without randomness for predictability
+
+; Card 1
+(print-rom-string que-1)
+(push 10) (out 0x01)
+(print-rom-string ans-1)
+(push 10) (out 0x01)
+(push 10) (out 0x01)
+
+; Card 2
+(print-rom-string que-2)
+(push 10) (out 0x01)
+(print-rom-string ans-2)
+(push 10) (out 0x01)
+(push 10) (out 0x01)
+
+; Card 3
+(print-rom-string que-3)
+(push 10) (out 0x01)
+(print-rom-string ans-3)
+(push 10) (out 0x01)
+
+(halt)

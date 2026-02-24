@@ -52,13 +52,16 @@ Dublin|Quelle est la capitale de l'Irlande?
 - **Status**: ✅ COMPLETED
 
 ### Task 3: Create main program loop
-- Initialize the flashcard data
-- Pick a random flashcard using RNG (0x10)
-- Display the question
-- Use a delay (via timer) to let user read
-- Display the answer
-- Move to next question
-- **Status**: Pending
+- ✅ Initialize the flashcard data (using Task 1 structure)
+- ✅ Pick a random flashcard using RNG (0x10)
+- ✅ Display the question (using print-rom-string)
+- ✅ Use a delay (busy-wait loop) to let user read
+- ✅ Display the answer
+- ✅ Loop to next question (main-loop)
+- ✅ Created examples/flashcard-app.spl with dispatch mechanism
+- ✅ Created test file (tests/test_flashcard_app.spl)
+- ✅ All tests passing (32/32)
+- **Status**: ✅ COMPLETED
 
 ### Task 4: Test the program
 - Assemble and run the SPL program

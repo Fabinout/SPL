@@ -674,15 +674,56 @@ class VideoSubsystem:
 
         # Add instruction label at the bottom
         instr_frame = tk.Frame(self._root)
-        instr_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        instr_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
 
         instr_label = tk.Label(
             instr_frame,
-            text="Press any key to continue...",
+            text="Press any key or click a button to continue...",
             font=("Arial", 10),
             fg="#666666"
         )
         instr_label.pack()
+
+        # Add button frame
+        button_frame = tk.Frame(self._root)
+        button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        # Create buttons
+        next_btn = tk.Button(
+            button_frame,
+            text="Continue (Space)",
+            command=lambda: self._queue_keypress(0x20),
+            font=("Arial", 10),
+            bg="#4CAF50",
+            fg="white",
+            padx=10,
+            pady=5
+        )
+        next_btn.pack(side=tk.LEFT, padx=5)
+
+        enter_btn = tk.Button(
+            button_frame,
+            text="Confirm (Enter)",
+            command=lambda: self._queue_keypress(0x0D),
+            font=("Arial", 10),
+            bg="#2196F3",
+            fg="white",
+            padx=10,
+            pady=5
+        )
+        enter_btn.pack(side=tk.LEFT, padx=5)
+
+        quit_btn = tk.Button(
+            button_frame,
+            text="Quit (Esc)",
+            command=self._on_close,
+            font=("Arial", 10),
+            bg="#f44336",
+            fg="white",
+            padx=10,
+            pady=5
+        )
+        quit_btn.pack(side=tk.RIGHT, padx=5)
 
         # Bind keyboard events
         self._root.bind("<Key>", self._on_key_press)

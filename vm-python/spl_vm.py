@@ -1220,9 +1220,10 @@ class SPLVM:
                     self.fault(f"load-indirect: address 0x{addr:04X} out of bounds")
                 self.push(self.memory[addr])
             elif opcode == OP_STORE_INDIRECT:
-                lo = self.pop(); hi = self.pop()
+                lo = self.pop()               # Pop LO (top of stack)
+                hi = self.pop()               # Pop HI
+                val = self.pop()              # Pop VALUE (bottom of stack)
                 addr = (hi << 8) | lo
-                val = self.pop()
                 if addr >= self.MEMORY_SIZE:
                     self.fault(f"store-indirect: address 0x{addr:04X} out of bounds")
                 self.memory[addr] = val

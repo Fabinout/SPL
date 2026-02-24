@@ -418,6 +418,28 @@ def main():
             failed += 1
         total += 1
 
+    # Test File I/O subsystem
+    fileio_test = os.path.join(ROOT, "vm-python", "tests", "test_file_io.spl")
+    if os.path.exists(fileio_test):
+        import shutil
+        # Clean up any previous test file
+        if os.path.exists("test.txt"):
+            os.remove("test.txt")
+
+        ok, actual, err = asm_and_run(fileio_test)
+        if ok and "Write: OK" in actual and "Hello" in actual:
+            print("  PASS  test_file_io.spl (File I/O: read/write)")
+            passed += 1
+        else:
+            print(f"  FAIL  test_file_io.spl")
+            if err:
+                print(f"        error: {err}")
+            else:
+                print(f"        expected: 'Write: OK' and 'Hello' in output")
+                print(f"        actual:   {actual!r}")
+            failed += 1
+        total += 1
+
     # --- Python test modules (Priority 1 & 2) ---
     import unittest
 

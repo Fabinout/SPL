@@ -209,6 +209,133 @@ class AudioSubsystem:
 
 
 # ---------------------------------------------------------------------------
+# File I/O subsystem
+# ---------------------------------------------------------------------------
+
+class FileIOSubsystem:
+    """Handles sequential file read/write operations."""
+
+    def __init__(self):
+        self.open_file = None          # File handle (binary mode)
+        self.filename_buf = bytearray() # Accumulate filename bytes
+        self.file_data = bytearray()    # File contents for read mode
+        self.file_pos = 0               # Current position in file
+        self.file_mode = 0              # 0=read, 1=write, 2=append
+        self.error_flag = False         # Error on last operation
+        self.eof_flag = False           # EOF reached
+
+    def set_mode(self, mode):
+        """Set file mode (0=read, 1=write, 2=append)."""
+        self.file_mode = mode & 0xFF
+
+    def add_filename_byte(self, byte):
+        """Add a byte to the filename buffer."""
+        byte = byte & 0xFF
+        if byte == 0x00:  # Null terminator - open the file
+            self._open_file()
+            self.filename_buf.clear()
+        else:
+            self.filename_buf.append(byte)
+
+    def _open_file(self):
+        """Open the file based on accumulated filename and mode."""
+        if not self.filename_buf:
+            self.error_flag = True
+            return
+
+        try:
+            # Convert filename bytes to string
+            filename = self.filename_buf.decode('ascii')
+
+            if self.file_mode == 0:  # READ
+                with open(filename, 'rb') as f:
+                    self.file_data = bytearray(f.read())
+                self.file_pos = 0
+                self.eof_flag = False
+                self.error_flag = False
+
+            elif self.file_mode == 1:  # WRITE
+                # Open for writing (will truncate)
+                self.open_file = open(filename, 'wb')
+                self.error_flag = False
+
+            elif self.file_mode == 2:  # APPEND
+                # Open for appending
+                self.open_file = open(filename, 'ab')
+                self.error_flag = False
+
+        except FileNotFoundError:
+            self.error_flag = True
+            self.open_file = None
+            self.file_data = bytearray()
+        except (IOError, OSError, PermissionError) as e:
+            self.error_flag = True
+            self.open_file = None
+            self.file_data = bytearray()
+        except UnicodeDecodeError:
+            # Filename contains non-ASCII
+            self.error_flag = True
+            self.open_file = None
+
+    def close_file(self):
+        """Close the currently open file."""
+        if self.open_file is not None:
+            try:
+                self.open_file.close()
+            except Exception:
+                pass
+            self.open_file = None
+
+    def read_byte(self):
+        """Read one byte from the file (read mode only)."""
+        if self.file_mode != 0:
+            return 0  # Not in read mode
+
+        if self.eof_flag:
+            return 0
+
+        if self.file_pos >= len(self.file_data):
+            self.eof_flag = True
+            return 0
+
+        byte = self.file_data[self.file_pos]
+        self.file_pos += 1
+        return byte
+
+    def write_byte(self, byte):
+        """Write one byte to the file (write/append mode only)."""
+        byte = byte & 0xFF
+
+        if self.open_file is None:
+            self.error_flag = True
+            return
+
+        try:
+            self.open_file.write(bytes([byte]))
+        except (IOError, OSError) as e:
+            self.error_flag = True
+
+    def get_status(self):
+        """Get file status byte."""
+        status = 0
+
+        if self.eof_flag:
+            status |= 0x01  # bit0: EOF
+
+        if self.error_flag:
+            status |= 0x02  # bit1: ERROR
+
+        if self.open_file is not None or self.file_mode == 0:
+            status |= 0x80  # bit7: FILE_OPEN
+
+        return status
+
+    def shutdown(self):
+        """Close any open file on shutdown."""
+        self.close_file()
+
+
+# ---------------------------------------------------------------------------
 # Video subsystem (lazy tkinter)
 # ---------------------------------------------------------------------------
 
@@ -816,6 +943,9 @@ class SPLVM:
         # Audio
         self.audio = AudioSubsystem()
 
+        # File I/O
+        self.fileio = FileIOSubsystem()
+
         # Frame timing for 60 FPS (16.67 ms per frame)
         self.frame_target_ms = 1000.0 / 60.0  # ~16.67 ms
         self.last_frame_time = time.monotonic()
@@ -904,6 +1034,12 @@ class SPLVM:
         elif 0x24 <= port <= 0x27:  # Keyboard polling (UP, DOWN, LEFT, RIGHT)
             return self.video.get_keyboard_port(port)
 
+        elif port == 0xA2:      # FILE_DATA — read byte from file
+            return self.fileio.read_byte()
+
+        elif port == 0xA3:      # FILE_STATUS — get file status
+            return self.fileio.get_status()
+
         elif 0x30 <= port <= 0x3F:  # Video
             return self.video.get_port(port)
 
@@ -928,6 +1064,21 @@ class SPLVM:
 
         elif port == 0x23:      # KBD_CLEAR
             self.video.clear_keyboard()
+
+        elif port == 0xA0:      # FILE_CMD
+            if val == 1:        # Open command
+                pass  # File opening is handled by add_filename_byte (null terminator)
+            elif val == 2:      # Close command
+                self.fileio.close_file()
+
+        elif port == 0xA1:      # FILE_MODE — set mode (0=read, 1=write, 2=append)
+            self.fileio.set_mode(val)
+
+        elif port == 0xA2:      # FILE_DATA — write byte to file
+            self.fileio.write_byte(val)
+
+        elif port == 0xA4:      # FILE_NAME — accumulate filename byte
+            self.fileio.add_filename_byte(val)
 
         elif port == 0x3A:      # VID_FLIP
             self.video.flip(self.memory)
@@ -1120,6 +1271,7 @@ class SPLVM:
                 self.fault(f"unknown opcode 0x{opcode:02X}")
 
         self.flush_console()
+        self.fileio.shutdown()
         self.audio.shutdown()
 
 

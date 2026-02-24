@@ -18,6 +18,7 @@
 11. \#11-périphériques-standard-portmapped-io
 12. \#12-affichage-vidéo--portmapped-io
 13. \#13-audio--portmapped-io
+13bis. \#13bis-fichiers--portmapped-io
 14. \#14-clavier--portmapped-io
 15. \#15-souris--portmapped-io
 16. \#16-synchronisation--timing
@@ -921,6 +922,299 @@ r1.y1 < r2.y2  AND  r1.y2 > r2.y1
 
 ***
 
+# **13bis. Fichiers — Port‑Mapped I/O**
+
+## **13bis.1. Modèle**
+
+*   **Accès fichier séquentiel** en lecture et écriture.
+*   **Un seul fichier ouvert à la fois** (architecture simple).
+*   **Pas de buffering** : chaque octet lire/écrit passe directement.
+*   **Noms de fichiers** : chaîne ASCII terminée par null (0x00).
+*   **Chemin relatif ou absolu** selon l'implémentation (recommandation : répertoire de travail = répertoire de la ROM).
+
+## **13bis.2. Ports fichiers (0xA0–0xA4)**
+
+| Port | Nom          | R/W | Description                                            |
+| ---: | ------------ | --- | ------------------------------------------------------ |
+| 0xA0 | FILE_CMD     | W   | Commande : 0=noop, 1=open, 2=close                     |
+| 0xA1 | FILE_MODE    | W   | Mode : 0=lecture, 1=écriture, 2=append                 |
+| 0xA2 | FILE_DATA    | R/W | Lire/écrire un octet                                   |
+| 0xA3 | FILE_STATUS  | R   | bit0: EOF, bit1: error, bit7: file_open                |
+| 0xA4 | FILE_NAME    | W   | Nom du fichier (écrire octet par octet, finir par 0x00) |
+
+## **13bis.3. Protocole d'ouverture**
+
+**Ouvrir un fichier pour lecture :**
+
+```lisp
+; Écrire le nom du fichier
+(push 0x64) (out 0xA4)  ; 'd'
+(push 0x61) (out 0xA4)  ; 'a'
+(push 0x74) (out 0xA4)  ; 't'
+(push 0x61) (out 0xA4)  ; 'a'
+(push 0x2E) (out 0xA4)  ; '.'
+(push 0x74) (out 0xA4)  ; 't'
+(push 0x78) (out 0xA4)  ; 'x'
+(push 0x74) (out 0xA4)  ; 't'
+(push 0x00) (out 0xA4)  ; null terminator
+
+; Définir le mode
+(push 0)    (out 0xA1)  ; 0 = lecture
+
+; Ouvrir le fichier
+(push 1)    (out 0xA0)  ; 1 = open
+
+; Vérifier l'erreur
+(in 0xA3)
+(push 2)(and)           ; Extraire bit1 (error)
+(jump-if-not-zero file-open-error)
+```
+
+**Ouvrir un fichier pour écriture :**
+
+```lisp
+; Même processus, mais mode 1 (écriture)
+(push 1)    (out 0xA1)  ; 1 = write
+(push 1)    (out 0xA0)  ; open
+```
+
+## **13bis.4. Lecture séquentielle**
+
+```lisp
+(label read-loop)
+(in 0xA3)               ; Lire status
+(push 1)(and)           ; Extraire bit0 (EOF)
+(jump-if-not-zero end-read)
+
+(in 0xA2)               ; Lire un octet
+; ... traiter l'octet ...
+
+(jump read-loop)
+
+(label end-read)
+(push 2) (out 0xA0)     ; Fermer (close)
+```
+
+## **13bis.5. Écriture séquentielle**
+
+```lisp
+; Écrire la chaîne "hello\n"
+(push 0x68) (out 0xA2)  ; 'h'
+(push 0x65) (out 0xA2)  ; 'e'
+(push 0x6C) (out 0xA2)  ; 'l'
+(push 0x6C) (out 0xA2)  ; 'l'
+(push 0x6F) (out 0xA2)  ; 'o'
+(push 0x0A) (out 0xA2)  ; '\n'
+
+; Vérifier erreur
+(in 0xA3)
+(push 2)(and)           ; bit1 = error
+(jump-if-not-zero write-error)
+
+(push 2) (out 0xA0)     ; Fermer
+```
+
+## **13bis.6. Sémantique des ports**
+
+### **FILE_CMD (0xA0) — Commandes**
+
+| Valeur | Nom    | Action                                                  |
+| -----: | ------ | ------------------------------------------------------- |
+|      0 | noop   | Aucune action (peut servir de synchronisation)          |
+|      1 | OPEN   | Ouvrir le fichier spécifié via FILE_NAME                |
+|      2 | CLOSE  | Fermer le fichier actuellement ouvert                   |
+
+**Notes :**
+- Écrire FILE_CMD déclenche la commande immédiatement.
+- Ouvrir un fichier alors qu'un autre est ouvert ferme d'abord l'ancien (implicite).
+- Fermer quand aucun fichier n'est ouvert est un noop.
+
+### **FILE_MODE (0xA1) — Mode d'accès**
+
+| Valeur | Mode    | Description                                   |
+| -----: | ------- | --------------------------------------------- |
+|      0 | READ    | Lecture seule (fichier doit exister)          |
+|      1 | WRITE   | Écriture (crée ou tronque le fichier)         |
+|      2 | APPEND  | Ajout à la fin (crée si n'existe pas)         |
+
+**Notes :**
+- FILE_MODE doit être écrit AVANT FILE_CMD pour open.
+- Si FILE_MODE change alors qu'un fichier est ouvert, fermer puis rouvrir.
+
+### **FILE_DATA (0xA2) — Données**
+
+**Lecture :** retourne le prochain octet du fichier (0x00 si EOF ou erreur).
+**Écriture :** écrit un octet dans le fichier.
+
+**Notes :**
+- Chaque lecture avance le pointeur fichier.
+- Chaque écriture avance le pointeur fichier.
+- Pas de `seek` — accès séquentiel uniquement.
+
+### **FILE_STATUS (0xA3) — Statut**
+
+| Bit | Nom      | Sens                                       |
+| --: | -------- | ------------------------------------------ |
+|   0 | EOF      | 1 = fin de fichier atteinte (lecture)      |
+|   1 | ERROR    | 1 = erreur (fichier non trouvé, permiss.)  |
+|   7 | OPEN     | 1 = un fichier est ouvert                  |
+
+**Notes :**
+- Les bits non listés sont réservés et doivent être ignorés.
+- EOF reste à 1 après la fin du fichier jusqu'à la fermeture.
+- ERROR est levé si : fichier non trouvé, pas de permission, disque plein, etc.
+
+### **FILE_NAME (0xA4) — Nom du fichier**
+
+Écrire les octets du nom du fichier un par un, **terminé par 0x00**.
+
+**Exemple :** Ouvrir `data.txt`
+```lisp
+(push 0x64) (out 0xA4)  ; 'd' (0x64)
+(push 0x61) (out 0xA4)  ; 'a' (0x61)
+(push 0x74) (out 0xA4)  ; 't' (0x74)
+(push 0x61) (out 0xA4)  ; 'a' (0x61)
+(push 0x2E) (out 0xA4)  ; '.' (0x2E)
+(push 0x74) (out 0xA4)  ; 't' (0x74)
+(push 0x78) (out 0xA4)  ; 'x' (0x78)
+(push 0x74) (out 0xA4)  ; 't' (0x74)
+(push 0x00) (out 0xA4)  ; null terminator
+```
+
+**Restrictions :**
+- **Longueur max :** 255 caractères (avant null).
+- **Caractères autorisés :** ASCII 0x20–0x7E (printable ASCII).
+- Pas de chemin absolu si l'implémentation n'est pas sécurisée (ex. : blocage des `../`).
+
+## **13bis.7. Garanties et limitations**
+
+### **Garanties**
+
+- ✅ Une fois ouvert avec succès, FILE_STATUS.OPEN = 1.
+- ✅ Lecture après la fin du fichier retourne 0.
+- ✅ Fermeture d'un fichier libère les ressources.
+- ✅ Pas de lecture/écriture après fermeture sans rouvrir.
+
+### **Limitations**
+
+- ❌ **Pas de seek** — accès séquentiel uniquement.
+- ❌ **Un seul fichier ouvert** à la fois.
+- ❌ **Pas de répertoires** — noms de fichiers plats seulement.
+- ❌ **Pas de lectures partielles** — lire retourne toujours 1 octet.
+
+## **13bis.8. Gestion d'erreur**
+
+```lisp
+(label open-and-check)
+; Écrire nom du fichier
+(push 0x64) (out 0xA4)  ; 'd'
+(push 0x61) (out 0xA4)  ; 'a'
+(push 0x74) (out 0xA4)  ; 't'
+(push 0x61) (out 0xA4)  ; 'a'
+(push 0x00) (out 0xA4)  ; null
+
+(push 0) (out 0xA1)     ; mode = read
+(push 1) (out 0xA0)     ; open
+
+; Attendre un peu (optionnel)
+(push 100)
+(label wait-loop)
+(push 1) (sub)
+(dup) (jump-if-not-zero wait-loop)
+(drop)
+
+; Vérifier le statut
+(in 0xA3)
+(dup)
+(push 2) (and)          ; bit1 = error?
+(jump-if-not-zero open-failed)
+
+(dup)
+(push 128) (and)        ; bit7 = open?
+(jump-if-zero open-failed)
+
+; Succès!
+(drop)
+(jump read-file)
+
+(label open-failed)
+(drop)
+; Afficher erreur...
+(halt)
+```
+
+## **13bis.9. Exemple complet : Lire et afficher data.txt**
+
+```lisp
+(label read-data-file)
+
+; Ouvrir data.txt en lecture
+(push 0x64) (out 0xA4)  ; 'd'
+(push 0x61) (out 0xA4)  ; 'a'
+(push 0x74) (out 0xA4)  ; 't'
+(push 0x61) (out 0xA4)  ; 'a'
+(push 0x2E) (out 0xA4)  ; '.'
+(push 0x74) (out 0xA4)  ; 't'
+(push 0x78) (out 0xA4)  ; 'x'
+(push 0x74) (out 0xA4)  ; 't'
+(push 0x00) (out 0xA4)  ; null
+
+(push 0)    (out 0xA1)  ; mode = read
+(push 1)    (out 0xA0)  ; open
+
+; Vérifier erreur
+(in 0xA3)
+(push 2) (and)
+(jump-if-not-zero read-error)
+
+; Boucle de lecture
+(label read-loop)
+(in 0xA3)               ; lire status
+(push 1) (and)          ; EOF?
+(jump-if-not-zero read-done)
+
+(in 0xA2)               ; lire octet
+(out 0x01)              ; afficher sur console
+
+(jump read-loop)
+
+(label read-done)
+(push 10) (out 0x01)    ; newline
+(push 2) (out 0xA0)     ; close
+(halt)
+
+(label read-error)
+(push 69) (out 0x01)    ; 'E'
+(push 82) (out 0x01)    ; 'R'
+(push 82) (out 0x01)    ; 'R'
+(halt)
+```
+
+## **13bis.10. Profils d'implémentation**
+
+### **Profil Core (obligatoire)**
+
+- ✅ Lecture et écriture de fichiers
+- ✅ Gestion d'erreur basique (EOF, fichier non trouvé)
+- ✅ Noms de fichiers < 256 caractères
+
+### **Profil Étendu (optionnel)**
+
+- 🔹 Append mode
+- 🔹 Noms de fichiers avec répertoires
+- 🔹 Protection de répertoires (pas d'accès hors sandbox)
+
+### **Notes de sécurité**
+
+Si l'implémentation s'exécute dans un environnement de confiance limitée :
+
+- Restreindre l'accès à un répertoire sandbox.
+- Refuser les chemins commençant par `/` (absolus).
+- Refuser les chemins contenant `../`.
+- Restreindre les extensions de fichier si nécessaire.
+
+***
+
 # **14. Clavier — Port‑Mapped I/O**
 
 ## **14.1. Modèle**
@@ -1114,6 +1408,7 @@ Modèle **polling non-destructif** : chaque lecture retourne l'état **courant**
 
 *   **Clavier polling d'état** (`0x24–0x27`) : indépendant ; si bit4 = 1, le clavier est présent (soit mode événements, soit polling, soit les deux)
 *   **Primitives graphiques** (`0x3E–0x3F`) : implicite si bit5 (vidéo) = 1 sur les hôtes supportant FB8/FB16 avec dessin hardware
+*   **Fichiers (File I/O)** (`0xA0–0xA4`) : optionnel ; les programmes peuvent tenter d'ouvrir un fichier. Si non supporté, FILE_STATUS retournera error bit = 1. Recommandé pour les applications persistantes (scores, data).
 
 **Exemple : tester vidéo**
 
@@ -1193,6 +1488,104 @@ Modèle **polling non-destructif** : chaque lecture retourne l'état **courant**
 *   ~60 FPS sur une VM moderne
 *   Temps logique : < 15 ms par frame
 *   Dessin : via `store` direct (pas de primitives hardware) ou via `0x3E` si disponible
+
+## **18.6. SPL‑Persistent‑App (applications avec état persistant)**
+
+**Cas d'usage :** applications d'apprentissage, jeux avec progression, éditeurs de données (flashcards, notes, listes).
+
+**Composants requis :**
+
+*   **Console** : `0x01` (interface utilisateur texte ou debug)
+*   **Clavier (événements)** : `0x20–0x21` (saisie utilisateur)
+*   **Fichiers** : `0xA0–0xA4` (sauvegarde/chargement données)
+*   **Vidéo** (optionnel) : `0x30–0x3A` (interface graphique minimaliste)
+*   **Timer** (optionnel) : `0x11–0x14` (timing, délais entre actions)
+
+**Données persistantes recommandées :**
+
+*   **data.txt** : fichier de données (cartes, listes, états)
+*   **progress.json** ou **stats.txt** : scores, progression, statistiques
+*   Format simple et lisible (ASCII, délimiteurs clairs)
+
+**Exemple de layout data.txt :**
+
+```
+# Format: field:value or [SECTION]
+[CARD]
+Q:Quelle est la capitale de la France?
+A:Paris
+D:0
+
+[PROGRESS]
+1:5:4
+
+```
+
+**Initialisation typique :**
+
+```lisp
+(label main)
+; Charger data depuis fichier
+(push 0x64)(out 0xA4)  ; 'd'
+(push 0x61)(out 0xA4)  ; 'a'
+(push 0x74)(out 0xA4)  ; 't'
+(push 0x61)(out 0xA4)  ; 'a'
+(push 0x00)(out 0xA4)  ; null
+(push 0)(out 0xA1)     ; read mode
+(push 1)(out 0xA0)     ; open
+
+(in 0xA3)
+(push 2)(and)
+(jump-if-not-zero no-data)
+
+; Parser données dans RAM (0x1000+)
+(label parse-loop)
+(in 0xA3)(push 1)(and)
+(jump-if-not-zero parse-done)
+(in 0xA2)  ; lire octet
+; ... parser ...
+(jump parse-loop)
+
+(label parse-done)
+(push 2)(out 0xA0)     ; close
+
+; Menu principal
+(label menu)
+; ... afficher menu ...
+; ... traiter input clavier ...
+
+; Sauvegarder scores en quittant
+(label save-data)
+(push 0x70)(out 0xA4)  ; 'p'
+(push 0x72)(out 0xA4)  ; 'r'
+(push 0x6F)(out 0xA4)  ; 'o'
+(push 0x67)(out 0xA4)  ; 'g'
+(push 0x00)(out 0xA4)  ; null
+(push 1)(out 0xA1)     ; write mode
+(push 1)(out 0xA0)     ; open
+
+; Écrire stats...
+(push 2)(out 0xA0)     ; close
+(halt)
+
+(label no-data)
+(print-rom-string default-data-msg)
+(jump menu)
+
+(data default-data-msg "No data file. Creating default..." 0)
+```
+
+**Mémoire recommandée :**
+
+*   `0x0000–0x0FFF` : stack/variables
+*   `0x1000–0x7FFF` : données parsées en RAM
+*   `0x8000–0xFFFF` : framebuffer (optionnel, si vidéo)
+
+**Garanties de performance :**
+
+*   Lecture fichier < 100 ms pour fichiers < 64 KiB
+*   Écriture < 100 ms pour fichiers < 64 KiB
+*   Interface responsif (< 200 ms pour traiter input clavier)
 
 ***
 

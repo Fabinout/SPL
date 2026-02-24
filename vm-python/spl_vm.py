@@ -609,6 +609,9 @@ class VideoSubsystem:
 
     def get_keyboard_input(self, port):
         """Get keyboard event-based input (0x20-0x21)."""
+        # Ensure tkinter window exists for keyboard capture
+        self._ensure_keyboard_window()
+
         if port == 0x20:  # KBD_DATA - read one byte from queue
             with self.kbd_lock:
                 if self.kbd_queue:
@@ -618,6 +621,43 @@ class VideoSubsystem:
             with self.kbd_lock:
                 return 1 if self.kbd_queue else 0
         return 0
+
+    def _ensure_keyboard_window(self):
+        """Create a minimal tkinter window for keyboard input if not already exists."""
+        if self._root is not None:
+            return  # Window already exists
+
+        import tkinter as tk
+
+        self._root = tk.Tk()
+        self._root.title("SPL Keyboard Input")
+        self._root.geometry("400x100")
+        self._root.resizable(False, False)
+
+        # Add a label to guide the user
+        label = tk.Label(
+            self._root,
+            text="SPL Keyboard Input Active\nPress any key to interact with the program",
+            font=("Arial", 12),
+            pady=20
+        )
+        label.pack()
+
+        # Bind keyboard events
+        self._root.bind("<Key>", self._on_key_press)
+        self._root.bind("<Up>", lambda e: self._on_key_down("up"))
+        self._root.bind("<Down>", lambda e: self._on_key_down("down"))
+        self._root.bind("<Left>", lambda e: self._on_key_down("left"))
+        self._root.bind("<Right>", lambda e: self._on_key_down("right"))
+
+        self._root.bind("<KeyRelease-Up>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-Down>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-Left>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-Right>", lambda e: self._on_key_up("right"))
+
+        self._root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._root.focus_set()
+        self._root.focus_force()
 
     def _queue_keypress(self, char_code):
         """Queue a key press event."""
@@ -808,6 +848,14 @@ class SPLVM:
             sys.stdout.buffer.flush()
             self.console_buf.clear()
 
+    def _process_events(self):
+        """Process pending tkinter events if window exists."""
+        if self.video and self.video._root:
+            try:
+                self.video._root.update()
+            except Exception:
+                pass  # Window was closed
+
     def _get_time_ms(self):
         elapsed_ns = time.monotonic_ns() - self.start_time_ns
         return (elapsed_ns // 1_000_000) & 0xFFFFFFFF
@@ -832,10 +880,16 @@ class SPLVM:
     def run(self):
         code = self.code
         code_len = self.code_len
+        instruction_count = 0
 
         while self.running:
             if self.pc >= code_len:
                 break
+
+            # Process tkinter events every 100 instructions to avoid blocking
+            instruction_count += 1
+            if instruction_count % 100 == 0:
+                self._process_events()
 
             opcode = code[self.pc]
             self.pc += 1

@@ -350,7 +350,7 @@ def main():
     if os.path.exists(print_cstring_test):
         ok, actual, err = asm_and_run(print_cstring_test)
         if ok and "Hello\nWorld\n" in actual:
-            print("  PASS  test_print_cstring.spl (string output)")
+            print("  PASS  test_print_cstring.spl (string output from RAM)")
             passed += 1
         else:
             print(f"  FAIL  test_print_cstring.spl")
@@ -358,6 +358,23 @@ def main():
                 print(f"        error: {err}")
             else:
                 print(f"        expected: 'Hello\\nWorld\\n'")
+                print(f"        actual:   {actual!r}")
+            failed += 1
+        total += 1
+
+    # Test print-rom-string
+    print_rom_test = os.path.join(ROOT, "tests", "test_print_rom_string.spl")
+    if os.path.exists(print_rom_test):
+        ok, actual, err = asm_and_run(print_rom_test)
+        if ok and "Hello\nWorld\nSPL String Output Test\n" in actual:
+            print("  PASS  test_print_rom_string.spl (string output from ROM)")
+            passed += 1
+        else:
+            print(f"  FAIL  test_print_rom_string.spl")
+            if err:
+                print(f"        error: {err}")
+            else:
+                print(f"        expected: 'Hello\\nWorld\\nSPL String Output Test\\n'")
                 print(f"        actual:   {actual!r}")
             failed += 1
         total += 1

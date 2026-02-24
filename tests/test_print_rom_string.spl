@@ -1,0 +1,30 @@
+; Test: print-rom-string instruction
+; This program tests the print-rom-string instruction by:
+; 1. Embedding strings in the bytecode
+; 2. Using print-rom-string to print them
+
+; Test 1: Single word from ROM
+(jump after-hello)
+(data hello "Hello" 0)
+(label after-hello)
+
+(print-rom-string hello)
+(push 10) (out 0x01)  ; newline
+
+; Test 2: Another word from ROM
+(jump after-world)
+(data world "World" 0)
+(label after-world)
+
+(print-rom-string world)
+(push 10) (out 0x01)  ; newline
+
+; Test 3: Longer phrase
+(jump after-greeting)
+(data greeting "SPL String Output Test" 0)
+(label after-greeting)
+
+(print-rom-string greeting)
+(push 10) (out 0x01)  ; newline
+
+(halt)

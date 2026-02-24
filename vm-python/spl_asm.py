@@ -39,6 +39,7 @@ INSTRUCTIONS = {
     'load-indirect':    (0x22, 'none'),
     'store-indirect':   (0x23, 'none'),
     'print-cstring':    (0x42, 'addr16'),
+    'print-rom-string': (0x43, 'target16'),  # Accepts labels like jump
     'jump':             (0x30, 'target16'),
     'jump-if-zero':     (0x31, 'target16'),
     'jump-if-not-zero': (0x32, 'target16'),

@@ -52,6 +52,7 @@ OP_STORE            = 0x21
 OP_LOAD_INDIRECT    = 0x22
 OP_STORE_INDIRECT   = 0x23
 OP_PRINT_CSTRING    = 0x42
+OP_PRINT_ROM_STRING = 0x43
 OP_JUMP             = 0x30
 OP_JUMP_IF_ZERO     = 0x31
 OP_JUMP_IF_NOT_ZERO = 0x32
@@ -872,6 +873,17 @@ class SPLVM:
                 # Read bytes from memory until null terminator, print each
                 while addr < self.MEMORY_SIZE:
                     byte = self.memory[addr]
+                    if byte == 0:
+                        break
+                    self.console_buf.append(byte)
+                    addr += 1
+            elif opcode == OP_PRINT_ROM_STRING:
+                addr = self.read_addr()
+                if addr >= self.code_len:
+                    self.fault(f"print-rom-string: address 0x{addr:04X} out of bounds (bytecode size: 0x{self.code_len:04X})")
+                # Read bytes from bytecode (ROM) until null terminator, print each
+                while addr < self.code_len:
+                    byte = self.code[addr]
                     if byte == 0:
                         break
                     self.console_buf.append(byte)

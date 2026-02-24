@@ -212,22 +212,52 @@ Les adresses sont des **constantes 16 bits** (nombres uniquement, pas de labels)
 (out port8)   ; pop 8 bits vers le périphérique
 ```
 
-## **6.5.1. String Output**
+## **6.5.1. String Output from RAM**
 
 ```lisp
 (print-cstring adresse16)   ; affiche une chaîne null-terminée depuis la RAM
 ```
 
-*   Lit des octets depuis la mémoire RAM à partir de `adresse16` jusqu'à rencontrer un octet nul (`0x00`).
+*   Lit des octets depuis la **mémoire RAM** à partir de `adresse16` jusqu'à rencontrer un octet nul (`0x00`).
 *   Chaque octet non-nul est écrit à la **console** (port `0x01`) automatiquement.
 *   L'octet nul (`0x00`) n'est **pas** affiché, c'est le marqueur de fin.
 *   L'instruction n'empile ni ne dépile rien sur la pile de travail.
 *   Erreur si l'adresse est hors limites de la mémoire (≥ 0x10000).
+*   **Cas d'usage** : Afficher du contenu **dynamique** généré à l'exécution.
 
 **Exemple** :
 ```lisp
-; Supposons "Hello\0" stocké en RAM à 0x0400
-(print-cstring 0x0400)   ; affiche "Hello"
+; Construire une chaîne à l'exécution
+(push 72) (store 0x0400)   ; 'H'
+(push 101) (store 0x0401)  ; 'e'
+(push 108) (store 0x0402)  ; 'l'
+(push 108) (store 0x0403)  ; 'l'
+(push 111) (store 0x0404)  ; 'o'
+(push 0) (store 0x0405)    ; null terminator
+(print-cstring 0x0400)     ; affiche "Hello"
+```
+
+## **6.5.2. String Output from Bytecode (ROM)**
+
+```lisp
+(print-rom-string adresse16)   ; affiche une chaîne null-terminée depuis le bytecode
+```
+
+*   Lit des octets depuis le **bytecode (ROM)** à partir de `adresse16` jusqu'à rencontrer un octet nul (`0x00`).
+*   Chaque octet non-nul est écrit à la **console** (port `0x01`) automatiquement.
+*   L'octet nul (`0x00`) n'est **pas** affiché, c'est le marqueur de fin.
+*   L'instruction n'empile ni ne dépile rien sur la pile de travail.
+*   **Cas d'usage** : Afficher du contenu **statique** (poésie, messages constants, documentation).
+*   **Avantage** : Plus efficace que `print-cstring` — pas besoin de copier la chaîne en RAM.
+*   Erreur si l'adresse est hors limites du bytecode.
+
+**Exemple** :
+```lisp
+; Chaîne statique dans le bytecode
+(data greeting "Hello, World!" 0)
+
+; ... plus tard dans le programme ...
+(print-rom-string greeting)  ; affiche "Hello, World!"
 ```
 
 ## **6.6. Données embarquées**
@@ -357,6 +387,7 @@ Chaque instruction s’encode :
 | load             | 0x20   | 2 bytes     |
 | store            | 0x21   | 2 bytes     |
 | print-cstring    | 0x42   | 2 bytes     |
+| print-rom-string | 0x43   | 2 bytes     |
 | jump             | 0x30   | 2 bytes     |
 | jump-if-zero     | 0x31   | 2 bytes     |
 | jump-if-not-zero | 0x32   | 2 bytes     |

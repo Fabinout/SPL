@@ -239,6 +239,9 @@ class VideoSubsystem:
         self.key_down = 0
         self.key_left = 0
         self.key_right = 0
+        # Keyboard event queue (for KBD_DATA/KBD_STATUS ports)
+        self.kbd_queue = []
+        self.kbd_lock = threading.Lock()
 
     def set_port(self, port, val):
         if port == 0x30:
@@ -522,6 +525,9 @@ class VideoSubsystem:
         self._root.bind("<KeyRelease-d>", lambda e: self._on_key_up("right"))
         self._root.bind("<KeyRelease-D>", lambda e: self._on_key_up("right"))
 
+        # Capture any key press for event queue (KBD_DATA/KBD_STATUS)
+        self._root.bind("<Key>", self._on_key_press)
+
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _on_mouse_motion(self, event):
@@ -563,6 +569,26 @@ class VideoSubsystem:
         elif key == "right":
             self.key_right = 0
 
+    def _on_key_press(self, event):
+        """Handle key press for event queue (KBD_DATA/KBD_STATUS)."""
+        # Get the character from the event
+        if event.char:
+            char_code = ord(event.char)
+            if 0 <= char_code <= 127:  # ASCII only
+                self._queue_keypress(char_code)
+        else:
+            # Handle special keys (Return, Space, Tab, etc.)
+            if event.keysym == "Return":
+                self._queue_keypress(0x0D)  # CR
+            elif event.keysym == "space":
+                self._queue_keypress(0x20)  # Space
+            elif event.keysym == "Tab":
+                self._queue_keypress(0x09)  # Tab
+            elif event.keysym == "BackSpace":
+                self._queue_keypress(0x08)  # Backspace
+            elif event.keysym == "Escape":
+                self._queue_keypress(0x1B)  # Escape
+
     def _on_close(self):
         self._closed = True
         if self._root:
@@ -580,6 +606,28 @@ class VideoSubsystem:
         elif port == 0x27:  # KBD_KEY_RIGHT
             return self.key_right
         return 0
+
+    def get_keyboard_input(self, port):
+        """Get keyboard event-based input (0x20-0x21)."""
+        if port == 0x20:  # KBD_DATA - read one byte from queue
+            with self.kbd_lock:
+                if self.kbd_queue:
+                    return self.kbd_queue.pop(0)
+            return 0
+        elif port == 0x21:  # KBD_STATUS - check if data ready (bit0)
+            with self.kbd_lock:
+                return 1 if self.kbd_queue else 0
+        return 0
+
+    def _queue_keypress(self, char_code):
+        """Queue a key press event."""
+        with self.kbd_lock:
+            self.kbd_queue.append(char_code)
+
+    def clear_keyboard(self):
+        """Clear the keyboard queue."""
+        with self.kbd_lock:
+            self.kbd_queue.clear()
 
     def get_mouse_port(self, port):
         if port == 0x70: return self.mouse_x & 0xFF
@@ -692,6 +740,9 @@ class SPLVM:
         elif port == 0x10:      # RNG8
             return random.randint(0, 255)
 
+        elif port in (0x20, 0x21):  # Keyboard event-based (KBD_DATA, KBD_STATUS)
+            return self.video.get_keyboard_input(port)
+
         elif port == 0x14:      # TIME_MS_B3 — latches
             self.time_latch = self._get_time_ms()
             return (self.time_latch >> 24) & 0xFF
@@ -730,6 +781,9 @@ class SPLVM:
                 self.flush_console()
         elif port == 0x03:      # CONSOLE_FLUSH
             self.flush_console()
+
+        elif port == 0x23:      # KBD_CLEAR
+            self.video.clear_keyboard()
 
         elif port == 0x3A:      # VID_FLIP
             self.video.flip(self.memory)

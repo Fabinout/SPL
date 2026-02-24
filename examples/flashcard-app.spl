@@ -3,11 +3,12 @@
 ; This is the complete flashcard application that:
 ; 1. Selects a random flashcard (0-23) from all 24 European capitals
 ; 2. Displays the question
-; 3. Waits for the user to read
+; 3. Waits for ANY keypress from the user
 ; 4. Displays the answer
 ; 5. Repeats with a new random card
 ;
 ; All 24 flashcards are included and fully functional.
+; Keyboard input: Press any key to reveal the answer.
 
 (jump program-start)
 
@@ -271,7 +272,7 @@
 (drop)
 (print-rom-string que-1)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-1)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -280,7 +281,7 @@
 (drop)
 (print-rom-string que-2)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-2)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -289,7 +290,7 @@
 (drop)
 (print-rom-string que-3)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-3)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -298,7 +299,7 @@
 (drop)
 (print-rom-string que-4)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-4)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -307,7 +308,7 @@
 (drop)
 (print-rom-string que-5)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-5)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -316,7 +317,7 @@
 (drop)
 (print-rom-string que-6)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-6)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -325,7 +326,7 @@
 (drop)
 (print-rom-string que-7)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-7)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -334,7 +335,7 @@
 (drop)
 (print-rom-string que-8)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-8)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -343,7 +344,7 @@
 (drop)
 (print-rom-string que-9)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-9)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -352,7 +353,7 @@
 (drop)
 (print-rom-string que-10)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-10)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -361,7 +362,7 @@
 (drop)
 (print-rom-string que-11)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-11)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -370,7 +371,7 @@
 (drop)
 (print-rom-string que-12)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-12)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -379,7 +380,7 @@
 (drop)
 (print-rom-string que-13)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-13)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -388,7 +389,7 @@
 (drop)
 (print-rom-string que-14)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-14)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -397,7 +398,7 @@
 (drop)
 (print-rom-string que-15)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-15)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -406,7 +407,7 @@
 (drop)
 (print-rom-string que-16)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-16)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -415,7 +416,7 @@
 (drop)
 (print-rom-string que-17)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-17)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -424,7 +425,7 @@
 (drop)
 (print-rom-string que-18)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-18)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -433,7 +434,7 @@
 (drop)
 (print-rom-string que-19)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-19)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -442,7 +443,7 @@
 (drop)
 (print-rom-string que-20)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-20)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -451,7 +452,7 @@
 (drop)
 (print-rom-string que-21)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-21)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -460,7 +461,7 @@
 (drop)
 (print-rom-string que-22)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-22)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -469,7 +470,7 @@
 (drop)
 (print-rom-string que-23)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-23)
 (push 10) (out 0x01)
 (jump main-loop)
@@ -478,31 +479,32 @@
 (drop)
 (print-rom-string que-24)
 (push 10) (out 0x01)
-(call wait-delay)
+(call wait-key)
 (print-rom-string ans-24)
 (push 10) (out 0x01)
 (jump main-loop)
 
 ; ============================================================================
-; DELAY ROUTINE - Wait for user to read the question
+; KEYBOARD INPUT ROUTINE - Wait for user to press any key
 ; ============================================================================
-; Simple busy-wait delay: approximately 1-2 seconds
-; More sophisticated version could use timer port (0x11-0x14)
+; Polls the keyboard (KBD_STATUS port 0x21) until a key is pressed.
+; Then reads the key (KBD_DATA port 0x20) to consume it from the queue.
+; Finally prints a newline before returning.
 
-(label wait-delay)
-(push 0)                ; Initialize counter to 0
+(label wait-key)
 
-(label delay-loop)
+(label wait-for-input)
+(in 0x21)               ; Read KBD_STATUS (port 0x21)
 (push 1)
-(add)                   ; Increment counter
-(push 200)              ; Check if we've counted to 200
-(dup)
-(swap)
-(lt)                    ; Compare: counter < 200 ?
-(jump-if-not-zero delay-loop)  ; If true, loop
+(and)                   ; Extract bit0 (data ready): 1 if key available, 0 otherwise
+(jump-if-zero wait-for-input)  ; If no key, loop back and wait
 
-(drop)                  ; Clean up counter
-(push 10) (out 0x01)    ; Print newline between Q and A
+; Key is available, read it (consume from queue)
+(in 0x20)               ; Read KBD_DATA (port 0x20) -> key code on stack
+(drop)                  ; Discard the key code (we don't care which key)
+
+; Print newline between Q and A
+(push 10) (out 0x01)
 (return)
 
 ; ============================================================================

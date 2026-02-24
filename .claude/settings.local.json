@@ -5,7 +5,10 @@
       "Bash(python:*)",
       "Bash(git -C \"C:\\\\Users\\\\fabie\\\\WebstormProjects\\\\SPL\" log --oneline -5)",
       "Bash(python3:*)",
-      "Bash(timeout 3 python3:*)"
+      "Bash(timeout 3 python3:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

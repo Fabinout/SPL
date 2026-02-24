@@ -380,7 +380,7 @@ def main():
         total += 1
 
     # Test flashcard data structure
-    flashcard_test = os.path.join(ROOT, "tests", "test_flashcard_data.spl")
+    flashcard_test = os.path.join(ROOT, "tests", "projects", "flashcard", "test_flashcard_data.spl")
     if os.path.exists(flashcard_test):
         ok, actual, err = asm_and_run(flashcard_test)
         if ok and "Paris\n" in actual and "Berlin\n" in actual and "Madrid\n" in actual:
@@ -397,7 +397,7 @@ def main():
         total += 1
 
     # Test flashcard app main loop
-    app_test = os.path.join(ROOT, "tests", "test_flashcard_app.spl")
+    app_test = os.path.join(ROOT, "tests", "projects", "flashcard", "test_flashcard_app.spl")
     if os.path.exists(app_test):
         ok, actual, err = asm_and_run(app_test)
         if ok and "Paris\n" in actual and "Berlin\n" in actual and "Madrid\n" in actual and "Quelle" in actual:

@@ -379,6 +379,23 @@ def main():
             failed += 1
         total += 1
 
+    # Test flashcard data structure
+    flashcard_test = os.path.join(ROOT, "tests", "test_flashcard_data.spl")
+    if os.path.exists(flashcard_test):
+        ok, actual, err = asm_and_run(flashcard_test)
+        if ok and "Paris\n" in actual and "Berlin\n" in actual and "Madrid\n" in actual:
+            print("  PASS  test_flashcard_data.spl (flashcard data structure)")
+            passed += 1
+        else:
+            print(f"  FAIL  test_flashcard_data.spl")
+            if err:
+                print(f"        error: {err}")
+            else:
+                print(f"        expected: flashcard data with Paris, Berlin, Madrid")
+                print(f"        actual:   {actual!r}")
+            failed += 1
+        total += 1
+
     # --- Python test modules (Priority 1 & 2) ---
     import unittest
 

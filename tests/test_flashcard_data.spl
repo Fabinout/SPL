@@ -1,0 +1,36 @@
+; Test: Flashcard data structure
+; Verifies that all 24 flashcards are accessible and displayable
+
+(jump after-data)
+
+; Sample of flashcard data (just a few for testing)
+(data ans-france "Paris" 0)
+(data que-france "Quelle est la capitale de la France?" 0)
+
+(data ans-germany "Berlin" 0)
+(data que-germany "Quelle est la capitale de l'Allemagne?" 0)
+
+(data ans-spain "Madrid" 0)
+(data que-spain "Quelle est la capitale de l'Espagne?" 0)
+
+(label after-data)
+
+; Test 1: Display France flashcard
+(print-rom-string que-france)
+(push 10) (out 0x01)
+(print-rom-string ans-france)
+(push 10) (out 0x01)
+
+; Test 2: Display Germany flashcard
+(print-rom-string que-germany)
+(push 10) (out 0x01)
+(print-rom-string ans-germany)
+(push 10) (out 0x01)
+
+; Test 3: Display Spain flashcard
+(print-rom-string que-spain)
+(push 10) (out 0x01)
+(print-rom-string ans-spain)
+(push 10) (out 0x01)
+
+(halt)

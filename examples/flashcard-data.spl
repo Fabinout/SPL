@@ -1,0 +1,151 @@
+; Task 1: Flashcard Data Structure for European Capitals
+;
+; This program demonstrates storing and accessing 24 European capital flashcards.
+; Each flashcard consists of a pair: answer (capital) and question (in French).
+;
+; Data is stored using (data) pseudo-instruction in ROM (bytecode).
+; Each card can be accessed using (print-rom-string) with label references.
+;
+; Structure: [answer_label, question_label] × 24 pairs
+
+(jump program-start)
+
+; ============================================================================
+; FLASHCARD DATABASE: 24 European Capitals
+; ============================================================================
+; Format: (data answer "City" 0) followed by (data question "French question?" 0)
+
+; Card 1: France
+(data ans-1 "Paris" 0)
+(data que-1 "Quelle est la capitale de la France?" 0)
+
+; Card 2: Germany
+(data ans-2 "Berlin" 0)
+(data que-2 "Quelle est la capitale de l'Allemagne?" 0)
+
+; Card 3: Spain
+(data ans-3 "Madrid" 0)
+(data que-3 "Quelle est la capitale de l'Espagne?" 0)
+
+; Card 4: Italy
+(data ans-4 "Rome" 0)
+(data que-4 "Quelle est la capitale de l'Italie?" 0)
+
+; Card 5: Netherlands
+(data ans-5 "Amsterdam" 0)
+(data que-5 "Quelle est la capitale des Pays-Bas?" 0)
+
+; Card 6: Austria
+(data ans-6 "Vienne" 0)
+(data que-6 "Quelle est la capitale de l'Autriche?" 0)
+
+; Card 7: Poland
+(data ans-7 "Varsovie" 0)
+(data que-7 "Quelle est la capitale de la Pologne?" 0)
+
+; Card 8: Czech Republic
+(data ans-8 "Prague" 0)
+(data que-8 "Quelle est la capitale de la Republique tcheque?" 0)
+
+; Card 9: Greece
+(data ans-9 "Athenes" 0)
+(data que-9 "Quelle est la capitale de la Grece?" 0)
+
+; Card 10: Portugal
+(data ans-10 "Lisbonne" 0)
+(data que-10 "Quelle est la capitale du Portugal?" 0)
+
+; Card 11: Sweden
+(data ans-11 "Stockholm" 0)
+(data que-11 "Quelle est la capitale de la Suede?" 0)
+
+; Card 12: Denmark
+(data ans-12 "Copenhague" 0)
+(data que-12 "Quelle est la capitale du Danemark?" 0)
+
+; Card 13: Belgium
+(data ans-13 "Bruxelles" 0)
+(data que-13 "Quelle est la capitale de la Belgique?" 0)
+
+; Card 14: Switzerland
+(data ans-14 "Berne" 0)
+(data que-14 "Quelle est la capitale de la Suisse?" 0)
+
+; Card 15: Romania
+(data ans-15 "Bucarest" 0)
+(data que-15 "Quelle est la capitale de la Roumanie?" 0)
+
+; Card 16: Hungary
+(data ans-16 "Budapest" 0)
+(data que-16 "Quelle est la capitale de la Hongrie?" 0)
+
+; Card 17: Slovakia
+(data ans-17 "Bratislava" 0)
+(data que-17 "Quelle est la capitale de la Slovaquie?" 0)
+
+; Card 18: Slovenia
+(data ans-18 "Ljubljana" 0)
+(data que-18 "Quelle est la capitale de la Slovenie?" 0)
+
+; Card 19: Croatia
+(data ans-19 "Zagreb" 0)
+(data que-19 "Quelle est la capitale de la Croatie?" 0)
+
+; Card 20: Serbia
+(data ans-20 "Belgrade" 0)
+(data que-20 "Quelle est la capitale de la Serbie?" 0)
+
+; Card 21: Bulgaria
+(data ans-21 "Sofia" 0)
+(data que-21 "Quelle est la capitale de la Bulgarie?" 0)
+
+; Card 22: Finland
+(data ans-22 "Helsinki" 0)
+(data que-22 "Quelle est la capitale de la Finlande?" 0)
+
+; Card 23: Iceland
+(data ans-23 "Reykjavik" 0)
+(data que-23 "Quelle est la capitale de l'Islande?" 0)
+
+; Card 24: Ireland
+(data ans-24 "Dublin" 0)
+(data que-24 "Quelle est la capitale de l'Irlande?" 0)
+
+; ============================================================================
+; END OF FLASHCARD DATABASE
+; ============================================================================
+
+(label program-start)
+
+; ============================================================================
+; DEMONSTRATION: Display a sample of flashcards
+; ============================================================================
+; This section shows how to access and display flashcards
+
+(push 10) (out 0x01)
+(print-rom-string que-1) (push 10) (out 0x01)
+(print-rom-string ans-1) (push 10) (out 0x01)
+(push 10) (out 0x01)
+
+(print-rom-string que-2) (push 10) (out 0x01)
+(print-rom-string ans-2) (push 10) (out 0x01)
+(push 10) (out 0x01)
+
+(print-rom-string que-3) (push 10) (out 0x01)
+(print-rom-string ans-3) (push 10) (out 0x01)
+(push 10) (out 0x01)
+
+(print-rom-string que-24) (push 10) (out 0x01)
+(print-rom-string ans-24) (push 10) (out 0x01)
+(push 10) (out 0x01)
+
+; Display statistics
+(print-rom-string stat-msg) (push 10) (out 0x01)
+
+(halt)
+
+; ============================================================================
+; STATISTICS MESSAGE
+; ============================================================================
+
+(data stat-msg "Successfully loaded 24 European capital flashcards!" 0)

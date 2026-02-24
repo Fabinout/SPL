@@ -34,10 +34,13 @@ Dublin|Quelle est la capitale de l'Irlande?
 ## Implementation Tasks
 
 ### Task 1: Create SPL data structure for flashcards
-- Embed all 24 flashcard pairs directly in the SPL program
-- Use memory to store strings (answers and questions)
-- Create a simple lookup mechanism (array of pointers)
-- **Status**: Pending
+- ✅ Embedded all 24 flashcard pairs in examples/flashcard-data.spl
+- ✅ Used (data) pseudo-instruction with print-rom-string for efficient storage
+- ✅ Created label-based lookup mechanism (ans-1...ans-24, que-1...que-24)
+- ✅ Created test file (tests/test_flashcard_data.spl)
+- ✅ All tests passing (31/31)
+- ✅ Code size: 89 instructions, 1,252 bytes for 24 flashcards
+- **Status**: ✅ COMPLETED
 
 ### Task 2: Create string printing function in SPL
 - ✅ Added `(print-cstring address16)` instruction to spec

@@ -171,6 +171,7 @@
 ; Echo character
 (dup)
 (out 0x01)
+(out 0x03)              ; Flush console after each character
 
 ; Store character to INPUT_BUF[INPUT_POS]
 ; Stack: [char]

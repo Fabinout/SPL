@@ -245,6 +245,223 @@
 (return)
 
 ; ============================================================================
+; SUBROUTINE: print-string-from-memory
+; Displays null-terminated string from RAM, max MAX_LEN bytes
+; Input: DEST_HI at 0x0103, DEST_LO at 0x0104, MAX_LEN on stack
+; Output: stack empty
+; ============================================================================
+(label print-string-from-memory)
+(store 0x0101)          ; MAX_LEN in temporary
+(push 0)                ; byte_count = 0
+
+(label print-string-loop)
+(dup)
+(load 0x0101)
+(sub)
+(jump-if-zero print-string-done)  ; If byte_count >= MAX_LEN, exit
+
+; Load byte from [HI, LO + byte_count]
+(load 0x0103)           ; HI
+(load 0x0104)           ; LO
+(over)                  ; Duplicate byte_count
+(add)                   ; LO + byte_count
+(load-indirect)         ; Load byte
+
+; Check if null terminator
+(dup)
+(push 0)
+(sub)
+(jump-if-zero print-string-done)  ; If null, exit
+
+; Output the byte
+(out 0x01)
+(push 0)
+(out 0x03)              ; Flush after each character
+
+; Increment counter and continue
+(push 1)
+(add)
+(jump print-string-loop)
+
+(label print-string-done)
+(drop)
+(return)
+
+; ============================================================================
+; SUBROUTINE: parse-decimal-from-input
+; Converts ASCII digits in INPUT_BUF to numeric value
+; Input: INPUT_BUF at 0x0200 populated by read-line
+; Output: Decimal number (0-255) on stack
+; ============================================================================
+(label parse-decimal-from-input)
+(push 0)                ; result = 0
+(push 0)                ; index = 0
+
+(label parse-loop)
+(over)                  ; Duplicate result to check
+(dup)
+(push 0x02)             ; HI for INPUT_BUF
+(load 0x0101)           ; Load saved index (from read-line)
+(over)                  ; Duplicate index
+(push 0x00)
+(add)
+(load-indirect)         ; Load byte from INPUT_BUF[index]
+
+; Check if byte is a digit ('0'-'9', ASCII 48-57)
+(dup)
+(push 48)
+(sub)
+(dup)
+(push 9)
+(sub)
+(jump-if-not-zero parse-non-digit)  ; If not digit, exit loop
+
+; It's a digit: result = result * 10 + (byte - 48)
+(push 48)
+(swap)
+(add)                   ; Restore the byte value
+(swap)                  ; [digit, result]
+(push 10)
+(mul)                   ; result * 10
+(swap)
+(add)                   ; result = result * 10 + digit
+(push 1)
+(add)                   ; index++
+(jump parse-loop)
+
+(label parse-non-digit)
+(drop)
+(drop)
+(drop)
+(return)
+
+; ============================================================================
+; SUBROUTINE: copy-card-bytes
+; Copies exactly 128 bytes between two memory addresses
+; Input: SRC_HI at 0x0101, SRC_LO at 0x0102, DEST_HI at 0x0103, DEST_LO at 0x0104
+; Output: stack balanced, 128 bytes copied
+; ============================================================================
+(label copy-card-bytes)
+(push 0)                ; byte_index = 0
+
+(label copy-card-loop)
+(dup)
+(push 128)
+(sub)
+(jump-if-zero copy-card-done)
+
+; Load from [SRC_HI, SRC_LO + byte_index]
+(load 0x0101)           ; SRC_HI
+(load 0x0102)           ; SRC_LO
+(over)                  ; Duplicate byte_index
+(add)                   ; SRC_LO + byte_index
+(load-indirect)         ; Load byte
+
+; Store to [DEST_HI, DEST_LO + byte_index]
+(load 0x0103)           ; DEST_HI
+(load 0x0104)           ; DEST_LO
+(over)                  ; Duplicate byte_index
+(add)                   ; DEST_LO + byte_index
+(store-indirect)        ; Store byte
+
+; Increment counter
+(push 1)
+(add)
+(jump copy-card-loop)
+
+(label copy-card-done)
+(drop)
+(return)
+
+; ============================================================================
+; SUBROUTINE: read-bytes-from-file
+; Reads COUNT bytes from currently-open file into destination
+; Input: DEST_HI at 0x0101, DEST_LO at 0x0102, COUNT at 0x0103
+; Output: stack balanced, EOF flag checked
+; ============================================================================
+(label read-bytes-from-file)
+(push 0)                ; byte_index = 0
+
+(label read-bytes-loop)
+(dup)
+(load 0x0103)           ; COUNT
+(sub)
+(jump-if-zero read-bytes-done)
+
+; Read byte from file
+(in 0xA2)               ; Read from FILE_DATA
+
+; Store to [DEST_HI, DEST_LO + byte_index]
+(load 0x0101)           ; DEST_HI
+(load 0x0102)           ; DEST_LO
+(over)                  ; Duplicate byte_index
+(add)                   ; DEST_LO + byte_index
+(store-indirect)        ; Store byte
+
+; Check EOF (FILE_STATUS bit 0)
+(in 0xA3)               ; Read FILE_STATUS
+(push 1)
+(and)
+(jump-if-not-zero read-bytes-eof)
+
+; Increment counter and continue
+(push 1)
+(add)
+(jump read-bytes-loop)
+
+(label read-bytes-eof)
+(drop)
+(return)
+
+(label read-bytes-done)
+(drop)
+(return)
+
+; ============================================================================
+; SUBROUTINE: write-bytes-to-file
+; Writes COUNT bytes from source to currently-open file
+; Input: SRC_HI at 0x0101, SRC_LO at 0x0102, COUNT at 0x0103
+; Output: stack balanced, error flag checked
+; ============================================================================
+(label write-bytes-to-file)
+(push 0)                ; byte_index = 0
+
+(label write-bytes-loop)
+(dup)
+(load 0x0103)           ; COUNT
+(sub)
+(jump-if-zero write-bytes-done)
+
+; Load byte from [SRC_HI, SRC_LO + byte_index]
+(load 0x0101)           ; SRC_HI
+(load 0x0102)           ; SRC_LO
+(over)                  ; Duplicate byte_index
+(add)                   ; SRC_LO + byte_index
+(load-indirect)         ; Load byte
+
+; Write byte to file
+(out 0xA2)              ; Write to FILE_DATA
+
+; Check error flag (FILE_STATUS bit 1)
+(in 0xA3)               ; Read FILE_STATUS
+(push 2)
+(and)
+(jump-if-not-zero write-bytes-error)
+
+; Increment counter and continue
+(push 1)
+(add)
+(jump write-bytes-loop)
+
+(label write-bytes-error)
+(drop)
+(return)
+
+(label write-bytes-done)
+(drop)
+(return)
+
+; ============================================================================
 ; SUBROUTINE: show-menu
 ; ============================================================================
 (label show-menu)
@@ -436,28 +653,26 @@
 (push 58)(out 0x01) ; :
 (push 32)(out 0x01)
 
-; Display question (simplified - just show first few chars)
-(push 0)            ; q_index
+; Display question (first 64 bytes or until null)
+(push 64)           ; MAX_LEN for question
+(call print-string-from-memory)
 
-(label list-q-loop)
-(dup)
-(push 32)           ; Show first 32 chars
-(sub)
-(jump-if-zero list-q-done)
+; Now display answer offset by 64 bytes
+(push 10)(out 0x01) ; Newline before answer
+(push 65)(out 0x01) ; A
+(push 58)(out 0x01) ; :
+(push 32)(out 0x01)
 
-(push 0x03)  ; Actually display from CARD_DATA
-; This is getting complex - simplified version:
-; Just show "[Card N]" for now
-
-(push 1)
+; Offset DEST_LO by 64 for answer
+(load 0x0104)
+(push 64)
 (add)
-(jump list-q-loop)
+(store 0x0104)
 
-(label list-q-done)
-(drop)
-(push 46)(out 0x01) ; .
-(push 46)(out 0x01)
-(push 46)(out 0x01)
+(push 64)           ; MAX_LEN for answer
+(call print-string-from-memory)
+
+(push 10)(out 0x01) ; Newline after answer
 
 (push 1)
 (add)
@@ -511,21 +726,96 @@
 (push 58)(out 0x01) ; :
 (push 32)(out 0x01)
 
-; For now, simplified stub
-(push 78)(out 0x01) ; N
-(push 111)(out 0x01); o
-(push 116)(out 0x01); t
-(push 32)(out 0x01)
-(push 105)(out 0x01); i
-(push 109)(out 0x01); m
-(push 112)(out 0x01); p
+; Read card number
+(call read-line)
+(call parse-decimal-from-input)
+(store 0x0101)       ; Store card_num in TEMP_INDEX
+
+; Validate: card_num < CARD_COUNT
+(load 0x0101)
+(load 0x0100)
+(swap)
+(sub)
+(jump-if-not-zero delete-invalid)
+
+; Valid card number - shift cards down
+; For each card from card_num to CARD_COUNT-2:
+;   Copy card[card_num+1] to card[card_num]
+
+(push 0)             ; shift_idx = 0
+(label delete-shift-loop)
+(dup)
+(load 0x0100)
+(push 1)
+(sub)
+(load 0x0101)
+(sub)
+(jump-if-zero delete-shift-done)  ; If shift_idx >= CARD_COUNT-1-card_num, exit
+
+; Calculate source card (card_num + 1 + shift_idx)
+(load 0x0101)
+(push 1)
+(add)
+(over)
+(add)
+(call card-address)
+(store 0x0101)       ; SRC_HI temporarily
+(store 0x0102)       ; SRC_LO temporarily
+
+; Calculate destination card (card_num + shift_idx)
+(load 0x0101)
+(over)
+(add)
+(call card-address)
+(store 0x0103)       ; DEST_HI
+(store 0x0104)       ; DEST_LO
+
+; Copy 128 bytes
+(call copy-card-bytes)
+
+; Increment shift_idx
+(push 1)
+(add)
+(jump delete-shift-loop)
+
+(label delete-shift-done)
+(drop)
+
+; Decrement CARD_COUNT
+(load 0x0100)
+(push 1)
+(sub)
+(store 0x0100)
+
+; Print success message
+(push 10)(out 0x01)
+(push 68)(out 0x01) ; D
+(push 101)(out 0x01); e
 (push 108)(out 0x01); l
 (push 101)(out 0x01); e
-(push 109)(out 0x01); m
-(push 101)(out 0x01); e
-(push 110)(out 0x01); n
 (push 116)(out 0x01); t
 (push 101)(out 0x01); d
+(push 33)(out 0x01) ; !
+(push 10)(out 0x01)
+
+(call wait-key)
+(return)
+
+(label delete-invalid)
+(push 10)(out 0x01)
+(push 73)(out 0x01) ; I
+(push 110)(out 0x01); n
+(push 118)(out 0x01); v
+(push 97)(out 0x01) ; a
+(push 108)(out 0x01); l
+(push 105)(out 0x01); i
+(push 100)(out 0x01); d
+(push 32)(out 0x01)
+(push 99)(out 0x01) ; c
+(push 97)(out 0x01) ; a
+(push 114)(out 0x01); r
+(push 100)(out 0x01); d
+(push 33)(out 0x01) ; !
 (push 10)(out 0x01)
 
 (return)
@@ -551,6 +841,34 @@
 ; Read card count byte
 (in 0xA2)
 (store 0x0100)
+
+; Loop to read all cards
+(push 0)            ; card_idx = 0
+
+(label load-card-loop)
+(dup)
+(load 0x0100)
+(sub)
+(jump-if-zero load-card-done)  ; If card_idx >= CARD_COUNT, exit
+
+; Calculate destination address for this card
+(dup)
+(call card-address)
+(store 0x0101)      ; DEST_HI
+(store 0x0102)      ; DEST_LO
+
+; Read 128 bytes for this card
+(push 128)
+(store 0x0103)      ; COUNT = 128
+(call read-bytes-from-file)
+
+; Increment card_idx and continue
+(push 1)
+(add)
+(jump load-card-loop)
+
+(label load-card-done)
+(drop)
 
 ; Close file
 (push 2)
@@ -584,6 +902,34 @@
 ; Write card count
 (load 0x0100)
 (out 0xA2)
+
+; Loop to write all cards
+(push 0)            ; card_idx = 0
+
+(label save-card-loop)
+(dup)
+(load 0x0100)
+(sub)
+(jump-if-zero save-card-done)  ; If card_idx >= CARD_COUNT, exit
+
+; Calculate source address for this card
+(dup)
+(call card-address)
+(store 0x0101)      ; SRC_HI
+(store 0x0102)      ; SRC_LO
+
+; Write 128 bytes for this card
+(push 128)
+(store 0x0103)      ; COUNT = 128
+(call write-bytes-to-file)
+
+; Increment card_idx and continue
+(push 1)
+(add)
+(jump save-card-loop)
+
+(label save-card-done)
+(drop)
 
 ; Close file
 (push 2)

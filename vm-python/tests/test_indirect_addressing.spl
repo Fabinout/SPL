@@ -1,0 +1,170 @@
+; Test d'indirect addressing natif
+;
+; Cette suite de tests valide :
+; - load-indirect : lire une valeur à une adresse calculée (HI, LO)
+; - store-indirect : écrire une valeur à une adresse calculée (HI, LO, VALUE)
+;
+; Convention de pile pour load-indirect : (HI bottom, LO top)
+; Convention de pile pour store-indirect : (VALUE bottom, HI middle, LO top)
+; Adresse calculée : (HI << 8) | LO
+
+(push 65)(out 0x01)     ; 'A' - test 1 : write then read
+
+; Écrire 42 à 0x0100
+; Stack: [42 (VALUE), 0x01 (HI), 0x00 (LO)]
+(push 42)
+(push 0x01)
+(push 0x00)
+(store-indirect)
+
+; Lire de 0x0100
+; Stack: [0x01 (HI), 0x00 (LO)]
+(push 0x01)
+(push 0x00)
+(load-indirect)
+
+; Vérifier que c'est 42
+(push 42)
+(sub)
+(jump-if-zero test2)
+(halt)  ; FAIL
+
+(label test2)
+(push 66)(out 0x01)     ; 'B' - test 2 : multiple addresses
+
+; Écrire 100 à 0x0110
+(push 100)
+(push 0x01)
+(push 0x10)
+(store-indirect)
+
+; Écrire 200 à 0x0120
+(push 200)
+(push 0x01)
+(push 0x20)
+(store-indirect)
+
+; Lire et vérifier 0x0110
+(push 0x01)
+(push 0x10)
+(load-indirect)
+(push 100)
+(sub)
+(jump-if-zero test3)
+(halt)  ; FAIL
+
+(label test3)
+; Lire et vérifier 0x0120
+(push 0x01)
+(push 0x20)
+(load-indirect)
+(push 200)
+(sub)
+(jump-if-zero test4)
+(halt)  ; FAIL
+
+(label test4)
+(push 67)(out 0x01)     ; 'C' - test 3 : different pages
+
+; Test avec page 0x02
+(push 99)
+(push 0x02)
+(push 0x00)
+(store-indirect)
+
+(push 0x02)
+(push 0x00)
+(load-indirect)
+(push 99)
+(sub)
+(jump-if-zero test5)
+(halt)  ; FAIL
+
+(label test5)
+; Test avec page 0x03
+(push 200)
+(push 0x03)
+(push 0xFF)
+(store-indirect)
+
+(push 0x03)
+(push 0xFF)
+(load-indirect)
+(push 200)
+(sub)
+(jump-if-zero test6)
+(halt)  ; FAIL
+
+(label test6)
+(push 68)(out 0x01)     ; 'D' - test 4 : read uninitialized memory
+
+; Lire une adresse non écrite
+(push 0x05)
+(push 0x50)
+(load-indirect)
+(drop)
+
+(label test7)
+(push 69)(out 0x01)     ; 'E' - test 5: eight values
+
+; Écrire séquence 1,2,3,4,5,6,7,8 à 0x0200-0x0207
+(push 1)
+(push 0x02)
+(push 0x00)
+(store-indirect)
+
+(push 2)
+(push 0x02)
+(push 0x01)
+(store-indirect)
+
+(push 3)
+(push 0x02)
+(push 0x02)
+(store-indirect)
+
+(push 4)
+(push 0x02)
+(push 0x03)
+(store-indirect)
+
+(push 5)
+(push 0x02)
+(push 0x04)
+(store-indirect)
+
+(push 6)
+(push 0x02)
+(push 0x05)
+(store-indirect)
+
+(push 7)
+(push 0x02)
+(push 0x06)
+(store-indirect)
+
+(push 8)
+(push 0x02)
+(push 0x07)
+(store-indirect)
+
+; Vérifier chaque valeur
+(push 0x02)(push 0x00)(load-indirect)(push 1)(sub)(jump-if-zero v2)(halt)
+(label v2)
+(push 0x02)(push 0x01)(load-indirect)(push 2)(sub)(jump-if-zero v3)(halt)
+(label v3)
+(push 0x02)(push 0x02)(load-indirect)(push 3)(sub)(jump-if-zero v4)(halt)
+(label v4)
+(push 0x02)(push 0x03)(load-indirect)(push 4)(sub)(jump-if-zero v5)(halt)
+(label v5)
+(push 0x02)(push 0x04)(load-indirect)(push 5)(sub)(jump-if-zero v6)(halt)
+(label v6)
+(push 0x02)(push 0x05)(load-indirect)(push 6)(sub)(jump-if-zero v7)(halt)
+(label v7)
+(push 0x02)(push 0x06)(load-indirect)(push 7)(sub)(jump-if-zero v8)(halt)
+(label v8)
+(push 0x02)(push 0x07)(load-indirect)(push 8)(sub)(jump-if-zero done)(halt)
+
+(label done)
+(push 10)(out 0x01)     ; Newline
+(halt)

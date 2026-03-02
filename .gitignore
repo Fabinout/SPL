@@ -1,9 +1,28 @@
-# Build artifacts
-*.rom
+# Build Artifacts
+*.rom                           # Compiled bytecode (generated from .spl)
+*.pyc                          # Python bytecode
+__pycache__/                   # Python cache
+.pytest_cache/                 # Pytest cache
+
+# IDE & Environment
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Python
-__pycache__/
-*.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
 
-# IDE
-.idea/
+# Temporary
+*.tmp
+*.bak

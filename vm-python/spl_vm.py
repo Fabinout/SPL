@@ -18,6 +18,7 @@ import time
 import random
 import math
 import threading
+import signal
 
 try:
     import sounddevice as sd
@@ -51,6 +52,8 @@ OP_LOAD             = 0x20
 OP_STORE            = 0x21
 OP_LOAD_INDIRECT    = 0x22
 OP_STORE_INDIRECT   = 0x23
+OP_PRINT_CSTRING    = 0x42
+OP_PRINT_ROM_STRING = 0x43
 OP_JUMP             = 0x30
 OP_JUMP_IF_ZERO     = 0x31
 OP_JUMP_IF_NOT_ZERO = 0x32
@@ -206,6 +209,133 @@ class AudioSubsystem:
 
 
 # ---------------------------------------------------------------------------
+# File I/O subsystem
+# ---------------------------------------------------------------------------
+
+class FileIOSubsystem:
+    """Handles sequential file read/write operations."""
+
+    def __init__(self):
+        self.open_file = None          # File handle (binary mode)
+        self.filename_buf = bytearray() # Accumulate filename bytes
+        self.file_data = bytearray()    # File contents for read mode
+        self.file_pos = 0               # Current position in file
+        self.file_mode = 0              # 0=read, 1=write, 2=append
+        self.error_flag = False         # Error on last operation
+        self.eof_flag = False           # EOF reached
+
+    def set_mode(self, mode):
+        """Set file mode (0=read, 1=write, 2=append)."""
+        self.file_mode = mode & 0xFF
+
+    def add_filename_byte(self, byte):
+        """Add a byte to the filename buffer."""
+        byte = byte & 0xFF
+        if byte == 0x00:  # Null terminator - open the file
+            self._open_file()
+            self.filename_buf.clear()
+        else:
+            self.filename_buf.append(byte)
+
+    def _open_file(self):
+        """Open the file based on accumulated filename and mode."""
+        if not self.filename_buf:
+            self.error_flag = True
+            return
+
+        try:
+            # Convert filename bytes to string
+            filename = self.filename_buf.decode('ascii')
+
+            if self.file_mode == 0:  # READ
+                with open(filename, 'rb') as f:
+                    self.file_data = bytearray(f.read())
+                self.file_pos = 0
+                self.eof_flag = False
+                self.error_flag = False
+
+            elif self.file_mode == 1:  # WRITE
+                # Open for writing (will truncate)
+                self.open_file = open(filename, 'wb')
+                self.error_flag = False
+
+            elif self.file_mode == 2:  # APPEND
+                # Open for appending
+                self.open_file = open(filename, 'ab')
+                self.error_flag = False
+
+        except FileNotFoundError:
+            self.error_flag = True
+            self.open_file = None
+            self.file_data = bytearray()
+        except (IOError, OSError, PermissionError) as e:
+            self.error_flag = True
+            self.open_file = None
+            self.file_data = bytearray()
+        except UnicodeDecodeError:
+            # Filename contains non-ASCII
+            self.error_flag = True
+            self.open_file = None
+
+    def close_file(self):
+        """Close the currently open file."""
+        if self.open_file is not None:
+            try:
+                self.open_file.close()
+            except Exception:
+                pass
+            self.open_file = None
+
+    def read_byte(self):
+        """Read one byte from the file (read mode only)."""
+        if self.file_mode != 0:
+            return 0  # Not in read mode
+
+        if self.eof_flag:
+            return 0
+
+        if self.file_pos >= len(self.file_data):
+            self.eof_flag = True
+            return 0
+
+        byte = self.file_data[self.file_pos]
+        self.file_pos += 1
+        return byte
+
+    def write_byte(self, byte):
+        """Write one byte to the file (write/append mode only)."""
+        byte = byte & 0xFF
+
+        if self.open_file is None:
+            self.error_flag = True
+            return
+
+        try:
+            self.open_file.write(bytes([byte]))
+        except (IOError, OSError) as e:
+            self.error_flag = True
+
+    def get_status(self):
+        """Get file status byte."""
+        status = 0
+
+        if self.eof_flag:
+            status |= 0x01  # bit0: EOF
+
+        if self.error_flag:
+            status |= 0x02  # bit1: ERROR
+
+        if self.open_file is not None or self.file_mode == 0:
+            status |= 0x80  # bit7: FILE_OPEN
+
+        return status
+
+    def shutdown(self):
+        """Close any open file on shutdown."""
+        self.close_file()
+
+
+# ---------------------------------------------------------------------------
 # Video subsystem (lazy tkinter)
 # ---------------------------------------------------------------------------
 
@@ -232,6 +362,22 @@ class VideoSubsystem:
         self.mouse_buttons = 0
         self.mouse_wheel = 0
         self.mouse_status = 0
+        # Keyboard state (polling mode for Pong)
+        self.key_up = 0
+        self.key_down = 0
+        self.key_left = 0
+        self.key_right = 0
+        # Keyboard event queue (for KBD_DATA/KBD_STATUS ports)
+        self.kbd_queue = []
+        self.kbd_lock = threading.Lock()
+        # Text widget for console output (created on demand)
+        self._text_widget = None
+        # Callback when window closes
+        self._on_close_callback = None
+
+    def set_on_close_callback(self, callback):
+        """Set a callback to be called when the window closes."""
+        self._on_close_callback = callback
 
     def set_port(self, port, val):
         if port == 0x30:
@@ -256,6 +402,126 @@ class VideoSubsystem:
             self.clear_lo = val
         elif port == 0x3C:
             self.clear_hi = val
+
+    def _read_u16_from_memory(self, memory, addr):
+        """Read 16-bit value from memory (little-endian: LO at addr, HI at addr+1)."""
+        lo = memory[addr] if addr < len(memory) else 0
+        hi = memory[addr + 1] if addr + 1 < len(memory) else 0
+        return lo | (hi << 8)
+
+    def rect_exec_with_memory(self, memory):
+        """Execute rectangle fill from parameter buffer at 0x0000-0x0009."""
+        x = self._read_u16_from_memory(memory, 0x0000)
+        y = self._read_u16_from_memory(memory, 0x0002)
+        w = self._read_u16_from_memory(memory, 0x0004)
+        h = self._read_u16_from_memory(memory, 0x0006)
+        color = self._read_u16_from_memory(memory, 0x0008)
+        self.rect_fill(memory, x, y, w, h, color)
+
+    def rect_fill(self, memory, x, y, w, h, color):
+        """Fill a rectangle at (x, y) with size (w, h) with the given color.
+
+        Handles both FB8 and FB16 modes with automatic clipping.
+        """
+        if self.mode == 0 or w <= 0 or h <= 0:
+            return
+
+        fb = self.fb_addr
+        stride = self.stride
+        video_w, video_h = self.width, self.height
+
+        # Clip to screen bounds
+        x1 = max(0, x)
+        y1 = max(0, y)
+        x2 = min(video_w, x + w)
+        y2 = min(video_h, y + h)
+
+        if x1 >= x2 or y1 >= y2:
+            return  # Completely off-screen
+
+        if self.mode == 1:  # FB8
+            color_byte = color & 0xFF
+            for yy in range(y1, y2):
+                base = fb + yy * stride
+                for xx in range(x1, x2):
+                    addr = base + xx
+                    if addr < len(memory):
+                        memory[addr] = color_byte
+
+        elif self.mode == 2:  # FB16
+            for yy in range(y1, y2):
+                base = fb + yy * stride
+                for xx in range(x1, x2):
+                    addr = base + 2 * xx
+                    if addr + 1 < len(memory):
+                        memory[addr] = color & 0xFF
+                        memory[addr + 1] = (color >> 8) & 0xFF
+
+    def line_exec_with_memory(self, memory):
+        """Execute line draw from parameter buffer at 0x0000-0x0009."""
+        x0 = self._read_u16_from_memory(memory, 0x0000)
+        y0 = self._read_u16_from_memory(memory, 0x0002)
+        x1 = self._read_u16_from_memory(memory, 0x0004)
+        y1 = self._read_u16_from_memory(memory, 0x0006)
+        color = self._read_u16_from_memory(memory, 0x0008)
+        self.bresenham_line(memory, x0, y0, x1, y1, color)
+
+    def bresenham_line(self, memory, x0, y0, x1, y1, color):
+        """Draw a line from (x0, y0) to (x1, y1) using Bresenham's algorithm.
+
+        Semi-open line: includes start point, excludes end point.
+        Automatically clips to screen bounds.
+        """
+        if self.mode == 0:
+            return
+
+        fb = self.fb_addr
+        stride = self.stride
+        video_w, video_h = self.width, self.height
+
+        # Clip coordinates to screen bounds
+        def clip_point(x, y):
+            return max(0, min(video_w - 1, x)), max(0, min(video_h - 1, y))
+
+        # Simple clipping: if both endpoints are outside on same side, skip
+        if (x0 < 0 and x1 < 0) or (x0 >= video_w and x1 >= video_w):
+            if (y0 < 0 and y1 < 0) or (y0 >= video_h and y1 >= video_h):
+                return
+
+        # Bresenham's algorithm
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x1 > x0 else -1
+        sy = 1 if y1 > y0 else -1
+        err = dx - dy
+
+        x, y = x0, y0
+
+        while True:
+            # Plot pixel if in bounds
+            if 0 <= x < video_w and 0 <= y < video_h:
+                if self.mode == 1:  # FB8
+                    addr = fb + y * stride + x
+                    if addr < len(memory):
+                        memory[addr] = color & 0xFF
+                elif self.mode == 2:  # FB16
+                    addr = fb + y * stride + 2 * x
+                    if addr + 1 < len(memory):
+                        memory[addr] = color & 0xFF
+                        memory[addr + 1] = (color >> 8) & 0xFF
+
+            # Check if we've reached the end point
+            if x == x1 and y == y1:
+                break
+
+            # Bresenham step
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            if e2 < dx:
+                err += dx
+                y += sy
 
     def get_port(self, port):
         if port == 0x39:    # VID_STATUS: vblank=1, fb-ready=1
@@ -301,7 +567,7 @@ class VideoSubsystem:
         # Create window on first flip
         if self._root is None:
             self._root = tk.Tk()
-            self._root.title("SPL Video")
+            self._root.title("SPL Video - Click window for keyboard focus")
             self._root.resizable(False, False)
             self._canvas = tk.Canvas(
                 self._root, width=w * scale, height=h * scale,
@@ -310,6 +576,9 @@ class VideoSubsystem:
             self._canvas.pack()
             self._bind_mouse()
             self.mouse_status = 0x01  # mouse present
+            # Give keyboard focus to the window
+            self._root.focus_set()
+            self._root.focus_force()
 
         # Build the image row by row
         photo = tk.PhotoImage(width=w, height=h)
@@ -364,6 +633,37 @@ class VideoSubsystem:
         self._canvas.bind("<Button-3>", lambda e: self._on_mouse_btn(e, True))
         self._canvas.bind("<ButtonRelease-3>", lambda e: self._on_mouse_btn(e, False))
         self._canvas.bind("<MouseWheel>", self._on_mouse_wheel)
+
+        # Keyboard bindings for directional input (polling mode)
+        self._root.bind("<Up>", lambda e: self._on_key_down("up"))
+        self._root.bind("<Down>", lambda e: self._on_key_down("down"))
+        self._root.bind("<Left>", lambda e: self._on_key_down("left"))
+        self._root.bind("<Right>", lambda e: self._on_key_down("right"))
+        self._root.bind("<w>", lambda e: self._on_key_down("up"))
+        self._root.bind("<W>", lambda e: self._on_key_down("up"))
+        self._root.bind("<s>", lambda e: self._on_key_down("down"))
+        self._root.bind("<S>", lambda e: self._on_key_down("down"))
+        self._root.bind("<a>", lambda e: self._on_key_down("left"))
+        self._root.bind("<A>", lambda e: self._on_key_down("left"))
+        self._root.bind("<d>", lambda e: self._on_key_down("right"))
+        self._root.bind("<D>", lambda e: self._on_key_down("right"))
+
+        self._root.bind("<KeyRelease-Up>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-Down>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-Left>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-Right>", lambda e: self._on_key_up("right"))
+        self._root.bind("<KeyRelease-w>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-W>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-s>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-S>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-a>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-A>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-d>", lambda e: self._on_key_up("right"))
+        self._root.bind("<KeyRelease-D>", lambda e: self._on_key_up("right"))
+
+        # Capture any key press for event queue (KBD_DATA/KBD_STATUS)
+        self._root.bind("<Key>", self._on_key_press)
+
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _on_mouse_motion(self, event):
@@ -383,11 +683,214 @@ class VideoSubsystem:
         delta = event.delta // 120
         self.mouse_wheel = max(-128, min(127, self.mouse_wheel + delta))
 
+    def _on_key_down(self, key):
+        """Handle key press for polling."""
+        if key == "up":
+            self.key_up = 1
+        elif key == "down":
+            self.key_down = 1
+        elif key == "left":
+            self.key_left = 1
+        elif key == "right":
+            self.key_right = 1
+
+    def _on_key_up(self, key):
+        """Handle key release for polling."""
+        if key == "up":
+            self.key_up = 0
+        elif key == "down":
+            self.key_down = 0
+        elif key == "left":
+            self.key_left = 0
+        elif key == "right":
+            self.key_right = 0
+
+    def _on_key_press(self, event):
+        """Handle key press for event queue (KBD_DATA/KBD_STATUS)."""
+        # Get the character from the event
+        if event.char:
+            char_code = ord(event.char)
+            if 0 <= char_code <= 127:  # ASCII only
+                self._queue_keypress(char_code)
+        else:
+            # Handle special keys (Return, Space, Tab, etc.)
+            if event.keysym == "Return":
+                self._queue_keypress(0x0D)  # CR
+            elif event.keysym == "space":
+                self._queue_keypress(0x20)  # Space
+            elif event.keysym == "Tab":
+                self._queue_keypress(0x09)  # Tab
+            elif event.keysym == "BackSpace":
+                self._queue_keypress(0x08)  # Backspace
+            elif event.keysym == "Escape":
+                self._queue_keypress(0x1B)  # Escape
+
     def _on_close(self):
         self._closed = True
         if self._root:
-            self._root.destroy()
+            try:
+                self._root.destroy()
+            except Exception:
+                pass
             self._root = None
+        # Call the close callback if set
+        if self._on_close_callback:
+            self._on_close_callback()
+
+    def get_keyboard_port(self, port):
+        """Get keyboard polling state (0x24-0x27)."""
+        if port == 0x24:  # KBD_KEY_UP
+            return self.key_up
+        elif port == 0x25:  # KBD_KEY_DOWN
+            return self.key_down
+        elif port == 0x26:  # KBD_KEY_LEFT
+            return self.key_left
+        elif port == 0x27:  # KBD_KEY_RIGHT
+            return self.key_right
+        return 0
+
+    def get_keyboard_input(self, port):
+        """Get keyboard event-based input (0x20-0x21)."""
+        # Ensure tkinter window exists for keyboard capture (unless GUI disabled)
+        gui_disabled = os.environ.get('SPL_NO_GUI', '0') == '1'
+        if not gui_disabled:
+            self._ensure_keyboard_window()
+
+        if port == 0x20:  # KBD_DATA - read one byte from queue
+            with self.kbd_lock:
+                if self.kbd_queue:
+                    return self.kbd_queue.pop(0)
+            return 0
+        elif port == 0x21:  # KBD_STATUS - check if data ready (bit0)
+            with self.kbd_lock:
+                return 1 if self.kbd_queue else 0
+        return 0
+
+    def _ensure_keyboard_window(self):
+        """Create a tkinter window with console output display."""
+        if self._root is not None:
+            return  # Window already exists
+
+        import tkinter as tk
+
+        self._root = tk.Tk()
+        self._root.title("SPL Application")
+        self._root.geometry("600x500")
+        self._root.resizable(True, True)
+
+        # Create a frame for the text display
+        frame = tk.Frame(self._root)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Add a scrollbar
+        scrollbar = tk.Scrollbar(frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Create the text widget for console output
+        self._text_widget = tk.Text(
+            frame,
+            font=("Courier", 12),
+            bg="#f0f0f0",
+            fg="#000000",
+            yscrollcommand=scrollbar.set,
+            wrap=tk.WORD,
+            state=tk.DISABLED  # Read-only initially
+        )
+        self._text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self._text_widget.yview)
+
+        # Add instruction label at the bottom
+        instr_frame = tk.Frame(self._root)
+        instr_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
+
+        instr_label = tk.Label(
+            instr_frame,
+            text="Press any key or click a button to continue...",
+            font=("Arial", 10),
+            fg="#666666"
+        )
+        instr_label.pack()
+
+        # Add button frame
+        button_frame = tk.Frame(self._root)
+        button_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        # Create buttons
+        next_btn = tk.Button(
+            button_frame,
+            text="Continue (Space)",
+            command=lambda: self._queue_keypress(0x20),
+            font=("Arial", 10),
+            bg="#4CAF50",
+            fg="white",
+            padx=10,
+            pady=5
+        )
+        next_btn.pack(side=tk.LEFT, padx=5)
+
+        enter_btn = tk.Button(
+            button_frame,
+            text="Confirm (Enter)",
+            command=lambda: self._queue_keypress(0x0D),
+            font=("Arial", 10),
+            bg="#2196F3",
+            fg="white",
+            padx=10,
+            pady=5
+        )
+        enter_btn.pack(side=tk.LEFT, padx=5)
+
+        quit_btn = tk.Button(
+            button_frame,
+            text="Quit (Esc)",
+            command=self._on_close,
+            font=("Arial", 10),
+            bg="#f44336",
+            fg="white",
+            padx=10,
+            pady=5
+        )
+        quit_btn.pack(side=tk.RIGHT, padx=5)
+
+        # Bind keyboard events
+        self._root.bind("<Key>", self._on_key_press)
+        self._root.bind("<Up>", lambda e: self._on_key_down("up"))
+        self._root.bind("<Down>", lambda e: self._on_key_down("down"))
+        self._root.bind("<Left>", lambda e: self._on_key_down("left"))
+        self._root.bind("<Right>", lambda e: self._on_key_down("right"))
+
+        self._root.bind("<KeyRelease-Up>", lambda e: self._on_key_up("up"))
+        self._root.bind("<KeyRelease-Down>", lambda e: self._on_key_up("down"))
+        self._root.bind("<KeyRelease-Left>", lambda e: self._on_key_up("left"))
+        self._root.bind("<KeyRelease-Right>", lambda e: self._on_key_up("right"))
+
+        self._root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._root.focus_set()
+        self._root.focus_force()
+
+    def _queue_keypress(self, char_code):
+        """Queue a key press event."""
+        with self.kbd_lock:
+            self.kbd_queue.append(char_code)
+
+    def clear_keyboard(self):
+        """Clear the keyboard queue."""
+        with self.kbd_lock:
+            self.kbd_queue.clear()
+
+    def write_to_console_window(self, text):
+        """Write text to the console window if it exists."""
+        if self._text_widget is None:
+            return
+
+        try:
+            import tkinter as tk
+            self._text_widget.config(state=tk.NORMAL)
+            self._text_widget.insert(tk.END, text)
+            self._text_widget.see(tk.END)  # Scroll to bottom
+            self._text_widget.config(state=tk.DISABLED)
+        except Exception:
+            pass  # Window was closed
 
     def get_mouse_port(self, port):
         if port == 0x70: return self.mouse_x & 0xFF
@@ -440,6 +943,16 @@ class SPLVM:
         # Audio
         self.audio = AudioSubsystem()
 
+        # File I/O
+        self.fileio = FileIOSubsystem()
+
+        # Frame timing for 60 FPS (16.67 ms per frame)
+        self.frame_target_ms = 1000.0 / 60.0  # ~16.67 ms
+        self.last_frame_time = time.monotonic()
+
+        # Set up close callback
+        self.video.set_on_close_callback(self._on_window_close)
+
     # --- Stack operations ---
 
     def push(self, val):
@@ -487,6 +1000,11 @@ class SPLVM:
         self.running = False
         sys.exit(1)
 
+    def _on_window_close(self):
+        """Called when the GUI window is closed."""
+        self.flush_console()
+        self.running = False
+
     # --- I/O ---
 
     def port_in(self, port):
@@ -495,6 +1013,9 @@ class SPLVM:
 
         elif port == 0x10:      # RNG8
             return random.randint(0, 255)
+
+        elif port in (0x20, 0x21):  # Keyboard event-based (KBD_DATA, KBD_STATUS)
+            return self.video.get_keyboard_input(port)
 
         elif port == 0x14:      # TIME_MS_B3 — latches
             self.time_latch = self._get_time_ms()
@@ -509,6 +1030,15 @@ class SPLVM:
             t = self.time_latch if self.time_latch is not None else self._get_time_ms()
             self.time_latch = None
             return t & 0xFF
+
+        elif 0x24 <= port <= 0x27:  # Keyboard polling (UP, DOWN, LEFT, RIGHT)
+            return self.video.get_keyboard_port(port)
+
+        elif port == 0xA2:      # FILE_DATA — read byte from file
+            return self.fileio.read_byte()
+
+        elif port == 0xA3:      # FILE_STATUS — get file status
+            return self.fileio.get_status()
 
         elif 0x30 <= port <= 0x3F:  # Video
             return self.video.get_port(port)
@@ -532,10 +1062,33 @@ class SPLVM:
         elif port == 0x03:      # CONSOLE_FLUSH
             self.flush_console()
 
+        elif port == 0x23:      # KBD_CLEAR
+            self.video.clear_keyboard()
+
+        elif port == 0xA0:      # FILE_CMD
+            if val == 1:        # Open command
+                pass  # File opening is handled by add_filename_byte (null terminator)
+            elif val == 2:      # Close command
+                self.fileio.close_file()
+
+        elif port == 0xA1:      # FILE_MODE — set mode (0=read, 1=write, 2=append)
+            self.fileio.set_mode(val)
+
+        elif port == 0xA2:      # FILE_DATA — write byte to file
+            self.fileio.write_byte(val)
+
+        elif port == 0xA4:      # FILE_NAME — accumulate filename byte
+            self.fileio.add_filename_byte(val)
+
         elif port == 0x3A:      # VID_FLIP
             self.video.flip(self.memory)
+            self._sync_frame_60fps()  # Sync to 60 FPS after each flip
         elif port == 0x3D:      # VID_CLEAR
             self.video.clear(self.memory)
+        elif port == 0x3E:      # RECT_EXEC
+            self.video.rect_exec_with_memory(self.memory)
+        elif port == 0x3F:      # LINE_EXEC
+            self.video.line_exec_with_memory(self.memory)
         elif 0x30 <= port <= 0x3C:  # Video config ports
             self.video.set_port(port, val)
         elif port == 0x77:      # MOUSE_CLEAR
@@ -546,23 +1099,67 @@ class SPLVM:
 
     def flush_console(self):
         if self.console_buf:
-            sys.stdout.buffer.write(bytes(self.console_buf))
-            sys.stdout.buffer.flush()
+            # Convert to string for display
+            text = bytes(self.console_buf).decode('utf-8', errors='replace')
+
+            # Check if GUI is disabled (for testing)
+            gui_disabled = os.environ.get('SPL_NO_GUI', '0') == '1'
+
+            # Write to GUI window if available and not disabled
+            if self.video and not gui_disabled:
+                # Ensure window exists on first output
+                if not self.video._text_widget:
+                    self.video._ensure_keyboard_window()
+                self.video.write_to_console_window(text)
+            else:
+                # Fall back to stdout if no video system or GUI disabled
+                sys.stdout.buffer.write(bytes(self.console_buf))
+                sys.stdout.buffer.flush()
+
             self.console_buf.clear()
+
+    def _process_events(self):
+        """Process pending tkinter events if window exists."""
+        if self.video and self.video._root:
+            try:
+                self.video._root.update()
+            except Exception:
+                pass  # Window was closed
 
     def _get_time_ms(self):
         elapsed_ns = time.monotonic_ns() - self.start_time_ns
         return (elapsed_ns // 1_000_000) & 0xFFFFFFFF
+
+    def _sync_frame_60fps(self):
+        """Sync frame timing to target 60 FPS (~16.67 ms per frame).
+
+        Called after VID_FLIP to ensure the game loop doesn't run faster than 60 FPS.
+        """
+        current_time = time.monotonic()
+        elapsed_ms = (current_time - self.last_frame_time) * 1000.0
+        sleep_ms = self.frame_target_ms - elapsed_ms
+
+        if sleep_ms > 0:
+            time.sleep(sleep_ms / 1000.0)
+            self.last_frame_time = time.monotonic()
+        else:
+            self.last_frame_time = current_time
 
     # --- Execution ---
 
     def run(self):
         code = self.code
         code_len = self.code_len
+        instruction_count = 0
 
         while self.running:
             if self.pc >= code_len:
                 break
+
+            # Process tkinter events every 100 instructions to avoid blocking
+            instruction_count += 1
+            if instruction_count % 100 == 0:
+                self._process_events()
 
             opcode = code[self.pc]
             self.pc += 1
@@ -623,9 +1220,10 @@ class SPLVM:
                     self.fault(f"load-indirect: address 0x{addr:04X} out of bounds")
                 self.push(self.memory[addr])
             elif opcode == OP_STORE_INDIRECT:
-                lo = self.pop(); hi = self.pop()
+                lo = self.pop()               # Pop LO (top of stack)
+                hi = self.pop()               # Pop HI
+                val = self.pop()              # Pop VALUE (bottom of stack)
                 addr = (hi << 8) | lo
-                val = self.pop()
                 if addr >= self.MEMORY_SIZE:
                     self.fault(f"store-indirect: address 0x{addr:04X} out of bounds")
                 self.memory[addr] = val
@@ -647,11 +1245,34 @@ class SPLVM:
                 self.push(self.port_in(self.read_byte()))
             elif opcode == OP_OUT:
                 port = self.read_byte(); self.port_out(port, self.pop())
+            elif opcode == OP_PRINT_CSTRING:
+                addr = self.read_addr()
+                if addr >= self.MEMORY_SIZE:
+                    self.fault(f"print-cstring: address 0x{addr:04X} out of bounds")
+                # Read bytes from memory until null terminator, print each
+                while addr < self.MEMORY_SIZE:
+                    byte = self.memory[addr]
+                    if byte == 0:
+                        break
+                    self.console_buf.append(byte)
+                    addr += 1
+            elif opcode == OP_PRINT_ROM_STRING:
+                addr = self.read_addr()
+                if addr >= self.code_len:
+                    self.fault(f"print-rom-string: address 0x{addr:04X} out of bounds (bytecode size: 0x{self.code_len:04X})")
+                # Read bytes from bytecode (ROM) until null terminator, print each
+                while addr < self.code_len:
+                    byte = self.code[addr]
+                    if byte == 0:
+                        break
+                    self.console_buf.append(byte)
+                    addr += 1
 
             else:
                 self.fault(f"unknown opcode 0x{opcode:02X}")
 
         self.flush_console()
+        self.fileio.shutdown()
         self.audio.shutdown()
 
 
@@ -678,6 +1299,14 @@ def main():
         sys.exit(1)
 
     vm = SPLVM(code)
+
+    # Set up signal handler for Ctrl+C
+    def signal_handler(signum, frame):
+        vm._on_window_close()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
     vm.run()
     vm.video.keep_open()
 

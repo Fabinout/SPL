@@ -1,0 +1,84 @@
+; Test primitives graphiques: rectangle fill et line drawing
+
+; Initialize video mode FB8, 320x240, fb @0x8000
+(push 1)      (out 0x30)     ; VID_MODE = FB8
+(push 0x40)   (out 0x31)     ; WIDTH_LO = 320
+(push 0x01)   (out 0x32)     ; WIDTH_HI = 1
+(push 0xF0)   (out 0x33)     ; HEIGHT_LO = 240
+(push 0x00)   (out 0x34)     ; HEIGHT_HI = 0
+(push 0x40)   (out 0x35)     ; STRIDE_LO = 320
+(push 0x01)   (out 0x36)     ; STRIDE_HI = 1
+(push 0x00)   (out 0x37)     ; FB_ADDR_LO = 0x00
+(push 0x80)   (out 0x38)     ; FB_ADDR_HI = 0x80
+
+; Clear with color 0
+(push 0)      (out 0x3B)     ; CLEAR_COLOR_LO = 0
+(push 0)      (out 0x3C)     ; CLEAR_COLOR_HI = 0
+(push 1)      (out 0x3D)     ; Clear screen
+
+; Test 1: Draw rectangle at (50, 50), 100x100, color 255 (white)
+(push 50)     (store 0x0000) ; X_LO = 50
+(push 0)      (store 0x0001) ; X_HI = 0
+(push 50)     (store 0x0002) ; Y_LO = 50
+(push 0)      (store 0x0003) ; Y_HI = 0
+(push 100)    (store 0x0004) ; W_LO = 100
+(push 0)      (store 0x0005) ; W_HI = 0
+(push 100)    (store 0x0006) ; H_LO = 100
+(push 0)      (store 0x0007) ; H_HI = 0
+(push 255)    (store 0x0008) ; COLOR = 255 (white)
+(push 0)      (store 0x0009)
+(push 1)      (out 0x3E)     ; RECT_EXEC
+
+; Test 2: Draw rectangle at (150, 150), 100x100, color 128 (gray)
+(push 150)    (store 0x0000)
+(push 0)      (store 0x0001)
+(push 150)    (store 0x0002)
+(push 0)      (store 0x0003)
+(push 100)    (store 0x0004)
+(push 0)      (store 0x0005)
+(push 100)    (store 0x0006)
+(push 0)      (store 0x0007)
+(push 128)    (store 0x0008)
+(push 0)      (store 0x0009)
+(push 1)      (out 0x3E)     ; RECT_EXEC
+
+; Test 3: Draw line from (0, 0) to (319, 239) color 200
+(push 0)      (store 0x0000) ; X0 = 0
+(push 0)      (store 0x0001)
+(push 0)      (store 0x0002) ; Y0 = 0
+(push 0)      (store 0x0003)
+(push 63)     (store 0x0004) ; X1 = 319
+(push 1)      (store 0x0005)
+(push 239)    (store 0x0006) ; Y1 = 239
+(push 0)      (store 0x0007)
+(push 200)    (store 0x0008) ; Color = 200
+(push 0)      (store 0x0009)
+(push 1)      (out 0x3F)     ; LINE_EXEC
+
+; Test 4: Draw line from (319, 0) to (0, 239) color 50
+(push 63)     (store 0x0000) ; X0 = 319
+(push 1)      (store 0x0001)
+(push 0)      (store 0x0002) ; Y0 = 0
+(push 0)      (store 0x0003)
+(push 0)      (store 0x0004) ; X1 = 0
+(push 0)      (store 0x0005)
+(push 239)    (store 0x0006) ; Y1 = 239
+(push 0)      (store 0x0007)
+(push 50)     (store 0x0008) ; Color = 50
+(push 0)      (store 0x0009)
+(push 1)      (out 0x3F)     ; LINE_EXEC
+
+; Flip to display
+(push 1)      (out 0x3A)     ; VID_FLIP
+
+; Print success message
+(push 68)     (out 0x01)     ; 'D'
+(push 82)     (out 0x01)     ; 'R'
+(push 65)     (out 0x01)     ; 'A'
+(push 87)     (out 0x01)     ; 'W'
+(push 32)     (out 0x01)     ; ' '
+(push 79)     (out 0x01)     ; 'O'
+(push 75)     (out 0x01)     ; 'K'
+(push 10)     (out 0x01)     ; newline
+
+(halt)

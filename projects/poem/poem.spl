@@ -1,0 +1,77 @@
+; Example: Shakespeare's Sonnet 30 using print-rom-string
+;
+; This demonstrates TWO string output methods:
+; 1. (print-rom-string) - for static strings embedded in bytecode (ROM) - EFFICIENT
+; 2. (print-cstring) - for dynamic strings built at runtime (RAM) - FLEXIBLE
+;
+; For static poetic content, print-rom-string is much cleaner!
+
+; ============================================================================
+; PART 1: Static strings stored in BYTECODE (ROM)
+; ============================================================================
+; These are constant strings - perfect for print-rom-string
+; Much cleaner than manual (push)(out) sequences!
+
+(jump program-start)
+
+; Sonnet lines embedded directly in bytecode
+(data line1 "When to the sessions of sweet silent thought" 0)
+(data line2 "I summon up remembrance of things past," 0)
+(data line3 "I sigh the lack of many a thing I sought," 0)
+(data line4 "And with old woes new wail my dear time's waste:" 0)
+(data line5 "Then can I drown an eye, unused to flow," 0)
+(data line6 "For precious friends hid in death's dateless night," 0)
+(data line7 "And weep afresh love's long since cancell'd woe," 0)
+(data line8 "And moan the expense of many a vanish'd sight:" 0)
+(data line9 "Then can I grieve at grievances foregone," 0)
+(data line10 "And heavily from woe to woe tell o'er" 0)
+(data line11 "The sad account of fore-bemoaned moan," 0)
+(data line12 "Which I new pay as if not paid before." 0)
+(data line13 "But if the while I think on thee, dear friend," 0)
+(data line14 "All losses are restored and sorrows end" 0)
+(data attribution "-- William Shakespeare" 0)
+
+(label program-start)
+
+; ============================================================================
+; PART 2: Print the sonnet using ROM strings
+; ============================================================================
+; Much cleaner: one instruction per line!
+
+(print-rom-string line1) (push 10) (out 0x01)
+(print-rom-string line2) (push 10) (out 0x01)
+(print-rom-string line3) (push 10) (out 0x01)
+(print-rom-string line4) (push 10) (out 0x01)
+(print-rom-string line5) (push 10) (out 0x01)
+(print-rom-string line6) (push 10) (out 0x01)
+(print-rom-string line7) (push 10) (out 0x01)
+(print-rom-string line8) (push 10) (out 0x01)
+(print-rom-string line9) (push 10) (out 0x01)
+(print-rom-string line10) (push 10) (out 0x01)
+(print-rom-string line11) (push 10) (out 0x01)
+(print-rom-string line12) (push 10) (out 0x01)
+(print-rom-string line13) (push 10) (out 0x01)
+(print-rom-string line14) (push 10) (out 0x01)
+
+(push 10) (out 0x01)  ; blank line
+
+(print-rom-string attribution)
+(push 10) (out 0x01)
+
+; ============================================================================
+; PART 3: Note on dynamic strings (RAM method)
+; ============================================================================
+; For strings computed at runtime, you would:
+; 1. Build the string in RAM using (push)(store) sequences
+; 2. Use (print-cstring address) to print it
+;
+; Example pattern:
+;   (push 72) (store 0x0400)   ; store 'H' at address 0x0400
+;   (push 101) (store 0x0401)  ; store 'e'
+;   (push 108) (store 0x0402)  ; store 'l'
+;   (push 108) (store 0x0403)  ; store 'l'
+;   (push 111) (store 0x0404)  ; store 'o'
+;   (push 0) (store 0x0405)    ; store null terminator
+;   (print-cstring 0x0400)     ; print the string
+
+(halt)

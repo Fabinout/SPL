@@ -1,0 +1,132 @@
+; Test indirect addressing opcodes (load-indirect 0x22, store-indirect 0x23)
+; Stack order: load-indirect pops [lo, hi], store-indirect pops [lo, hi, val]
+; But since stack is LIFO: load needs [hi, lo], store needs [val, hi, lo] from top to bottom
+; Output: ABCDEF on success, ! on failure
+
+; Test A: Basic load-indirect
+; Store 0xAB directly at address 0x1000
+(push 0xAB)
+(store 0x1000)
+
+; Load it back indirectly: stack top=[lo, hi]
+(push 0x00)             ; Push lo (0x00) - bottom
+(push 0x10)             ; Push hi (0x10) - top
+(load-indirect)         ; Pops: lo=0x10, hi=0x00, addr=(0x00<<8)|0x10=0x0010 - WRONG!
+; Actually for 0x1000 we need: addr = (0x10 << 8) | 0x00
+; So push in order that when popped gives: lo->0x00, hi->0x10
+; That means: push 0x10, then push 0x00 (so when popped: 0x00 first as lo, 0x10 as hi)
+; NO WAIT - let me recalculate. Push 0x00, 0x10 means stack is [0x00, 0x10]
+; When we pop: first pop gets 0x10 (top), assigns to lo - WRONG
+; We need first pop to get 0x00
+; So we should push: 0x10 (bottom), 0x00 (top), then pop gets 0x00 first (lo)
+
+; Let me restart with proper understanding:
+; Stack [bottom to top] = [0x10, 0x00]
+; Pop lo = 0x00 ✓
+; Pop hi = 0x10 ✓
+; So push 0x10 first, then 0x00
+
+(push 0xAB)
+(store 0x1000)
+
+(push 0x10)             ; Push hi first (goes to bottom)
+(push 0x00)             ; Push lo second (goes to top)
+(load-indirect)         ; Pops: lo=0x00, hi=0x10, addr=0x1000
+(push 0xAB)
+(sub)                   ; Should equal 0
+(jump-if-zero test_a_pass)
+(push 33) (out 0x01)    ; '!' fail
+(halt)
+
+(label test_a_pass)
+(push 65) (out 0x01)    ; 'A' pass
+
+; Test B: Basic store-indirect
+; Store 0xCD indirectly to address 0x2000
+; Need: lo=0x00, hi=0x20, val=0xCD
+; Stack order [bottom to top]: [val, hi, lo]
+; So: push value (0xCD) first, then hi (0x20), then lo (0x00)
+; When popped: lo=0x00, hi=0x20, val=0xCD
+(push 0xCD)             ; Value (bottom)
+(push 0x20)             ; hi
+(push 0x00)             ; lo (top)
+(store-indirect)        ; Stores to 0x2000
+
+; Verify by loading directly
+(load 0x2000)
+(push 0xCD)
+(sub)                   ; Should equal 0
+(jump-if-zero test_b_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_b_pass)
+(push 66) (out 0x01)    ; 'B' pass
+
+; Test C: Round-trip - store and load via indirect
+(push 0x42)             ; Value
+(push 0x30)             ; hi
+(push 0x00)             ; lo
+(store-indirect)        ; Store to 0x3000
+
+(push 0x30)             ; hi
+(push 0x00)             ; lo
+(load-indirect)         ; Load from 0x3000
+(push 0x42)
+(sub)
+(jump-if-zero test_c_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_c_pass)
+(push 67) (out 0x01)    ; 'C' pass
+
+; Test D: Load-indirect from lowest address (0x0000)
+(push 0x99)
+(store 0x0000)
+
+(push 0x00)             ; hi
+(push 0x00)             ; lo
+(load-indirect)         ; Load from 0x0000
+(push 0x99)
+(sub)
+(jump-if-zero test_d_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_d_pass)
+(push 68) (out 0x01)    ; 'D' pass
+
+; Test E: Load-indirect from highest address (0xFFFF)
+(push 0x77)
+(store 0xFFFF)
+
+(push 0xFF)             ; hi
+(push 0xFF)             ; lo
+(load-indirect)         ; Load from 0xFFFF
+(push 0x77)
+(sub)
+(jump-if-zero test_e_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_e_pass)
+(push 69) (out 0x01)    ; 'E' pass
+
+; Test F: Store-indirect at highest address (0xFFFF)
+(push 0x88)             ; Value
+(push 0xFF)             ; hi
+(push 0xFF)             ; lo
+(store-indirect)        ; Store to 0xFFFF
+
+(load 0xFFFF)
+(push 0x88)
+(sub)
+(jump-if-zero test_f_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_f_pass)
+(push 70) (out 0x01)    ; 'F' pass
+(push 10) (out 0x01)    ; Newline
+(halt)

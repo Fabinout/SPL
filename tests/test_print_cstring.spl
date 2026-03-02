@@ -1,0 +1,31 @@
+; Test: print-cstring instruction
+; This program tests the print-cstring instruction by:
+; 1. Storing a string in memory
+; 2. Using print-cstring to print it
+
+; Store "Hello" at memory address 0x0400
+(push 72)        (store 0x0400)   ; 'H'
+(push 101)       (store 0x0401)   ; 'e'
+(push 108)       (store 0x0402)   ; 'l'
+(push 108)       (store 0x0403)   ; 'l'
+(push 111)       (store 0x0404)   ; 'o'
+(push 0)         (store 0x0405)   ; null terminator
+
+; Print the string
+(print-cstring 0x0400)
+
+; Print a newline
+(push 10) (out 0x01)
+
+; Test 2: "World" at 0x0500
+(push 87)        (store 0x0500)   ; 'W'
+(push 111)       (store 0x0501)   ; 'o'
+(push 114)       (store 0x0502)   ; 'r'
+(push 108)       (store 0x0503)   ; 'l'
+(push 100)       (store 0x0504)   ; 'd'
+(push 0)         (store 0x0505)   ; null terminator
+
+(print-cstring 0x0500)
+(push 10) (out 0x01)
+
+(halt)

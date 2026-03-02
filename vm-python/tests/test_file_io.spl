@@ -1,0 +1,107 @@
+; test_file_io.spl
+; Tests File I/O subsystem (ports 0xA0-0xA4)
+
+; Layout:
+; 0x1000: filename buffer
+; 0x1100: data buffer for write test
+
+(label test-write-file)
+; Write "Hello" to test.txt
+
+; Set mode to WRITE (1)
+(push 1) (out 0xA1)
+
+; Write filename "test.txt" (null-terminated)
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x65) (out 0xA4)   ; 'e'
+(push 0x73) (out 0xA4)   ; 's'
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x2E) (out 0xA4)   ; '.'
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x78) (out 0xA4)   ; 'x'
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x00) (out 0xA4)   ; null terminator - triggers open
+
+; Write "Hello"
+(push 0x48) (out 0xA2)   ; 'H'
+(push 0x65) (out 0xA2)   ; 'e'
+(push 0x6C) (out 0xA2)   ; 'l'
+(push 0x6C) (out 0xA2)   ; 'l'
+(push 0x6F) (out 0xA2)   ; 'o'
+
+; Check for errors
+(in 0xA3)
+(push 2) (and)           ; bit1 = ERROR
+(jump-if-not-zero error-write)
+
+; Close file
+(push 2) (out 0xA0)
+
+; Print success message
+(push 0x57) (out 0x01)   ; 'W'
+(push 0x72) (out 0x01)   ; 'r'
+(push 0x69) (out 0x01)   ; 'i'
+(push 0x74) (out 0x01)   ; 't'
+(push 0x65) (out 0x01)   ; 'e'
+(push 0x3A) (out 0x01)   ; ':'
+(push 0x20) (out 0x01)   ; ' '
+(push 0x4F) (out 0x01)   ; 'O'
+(push 0x4B) (out 0x01)   ; 'K'
+(push 0x0A) (out 0x01)   ; '\n'
+
+(jump test-read-file)
+
+(label error-write)
+(push 0x57) (out 0x01)   ; 'W'
+(push 0x45) (out 0x01)   ; 'E'
+(push 0x52) (out 0x01)   ; 'R'
+(push 0x52) (out 0x01)   ; 'R'
+(push 0x0A) (out 0x01)   ; '\n'
+(halt)
+
+(label test-read-file)
+; Read back the file we just wrote
+
+; Set mode to READ (0)
+(push 0) (out 0xA1)
+
+; Write filename
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x65) (out 0xA4)   ; 'e'
+(push 0x73) (out 0xA4)   ; 's'
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x2E) (out 0xA4)   ; '.'
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x78) (out 0xA4)   ; 'x'
+(push 0x74) (out 0xA4)   ; 't'
+(push 0x00) (out 0xA4)   ; null - triggers open
+
+; Check for errors
+(in 0xA3)
+(push 2) (and)
+(jump-if-not-zero error-read)
+
+; Read loop
+(label read-loop)
+(in 0xA3)               ; Get status
+(push 1) (and)          ; bit0 = EOF?
+(jump-if-not-zero done)
+
+(in 0xA2)               ; Read byte
+(out 0x01)              ; Print it
+
+(jump read-loop)
+
+(label error-read)
+(push 0x52) (out 0x01)   ; 'R'
+(push 0x45) (out 0x01)   ; 'E'
+(push 0x52) (out 0x01)   ; 'R'
+(push 0x52) (out 0x01)   ; 'R'
+(push 0x0A) (out 0x01)   ; '\n'
+(halt)
+
+(label done)
+(push 0x0A) (out 0x01)   ; newline
+(push 2) (out 0xA0)      ; Close file
+
+(halt)

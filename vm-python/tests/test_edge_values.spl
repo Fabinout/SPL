@@ -1,0 +1,121 @@
+; Test arithmetic and comparison edge cases
+; All values are 8-bit: 0-255 with wrapping
+; Output: ABCDEFGH on success, ! on failure
+
+; Test A: Addition wrapping (255 + 1 = 0)
+(push 255)
+(push 1)
+(add)
+(push 0)
+(sub)
+(jump-if-zero test_a_pass)
+(push 33) (out 0x01)  ; '!' fail
+(halt)
+
+(label test_a_pass)
+(push 65) (out 0x01)  ; 'A' pass
+
+; Test B: Subtraction wrapping (0 - 1 = 255)
+(push 0)
+(push 1)
+(sub)
+(push 255)
+(sub)
+(jump-if-zero test_b_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_b_pass)
+(push 66) (out 0x01)  ; 'B' pass
+
+; Test C: Multiplication wrapping (128 × 2 = 256 mod 256 = 0)
+(push 128)
+(push 2)
+(mul)
+(push 0)
+(sub)
+(jump-if-zero test_c_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_c_pass)
+(push 67) (out 0x01)  ; 'C' pass
+
+; Test D: Operand order matters (10 - 3 = 7, but 3 - 10 = 249)
+; Push 10, push 3: stack is [3, 10]
+; Sub uses: second-from-top - top = 10 - 3 = 7
+(push 10)
+(push 3)
+(sub)
+(push 7)
+(sub)
+(jump-if-zero test_d_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_d_pass)
+(push 68) (out 0x01)  ; 'D' pass
+
+; Test E: Comparison less-than edge (5 < 3 = 0)
+(push 5)
+(push 3)
+(lt)
+(push 0)
+(sub)
+(jump-if-zero test_e_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_e_pass)
+(push 69) (out 0x01)  ; 'E' pass
+
+; Test F: Comparison greater-than edge (3 > 5 = 0)
+(push 3)
+(push 5)
+(gt)
+(push 0)
+(sub)
+(jump-if-zero test_f_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_f_pass)
+(push 70) (out 0x01)  ; 'F' pass
+
+; Test G: Equality comparison (3 < 3 = 0, 3 > 3 = 0)
+(push 3)
+(push 3)
+(lt)
+(push 0)
+(sub)
+(jump-if-zero test_g_1)
+(push 33) (out 0x01)
+(halt)
+
+(label test_g_1)
+(push 3)
+(push 3)
+(gt)
+(push 0)
+(sub)
+(jump-if-zero test_g_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label test_g_pass)
+(push 71) (out 0x01)  ; 'G' pass
+
+; Test H: Division by zero returns 0
+(push 10)
+(push 0)
+(div)
+(push 0)
+(sub)
+(jump-if-zero final_pass)
+(push 33) (out 0x01)
+(halt)
+
+(label final_pass)
+(push 72) (out 0x01)  ; 'H' pass
+(push 10) (out 0x01)  ; Newline
+(halt)
